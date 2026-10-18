@@ -3,14 +3,28 @@
 A web-based, physics-driven tabletop where any game can be played, because the
 engine only ever simulates _physical objects_ and lets humans enforce the rules.
 
-Release 0.22.0 keeps the existing server/browser ownership and single-instance deployment
-boundaries. Its authored models, card artwork, assisted stacking and hand/fan rendering need
-a server restart and client refresh; no new database migration or required service/configuration
-is introduced. Source dependency and existing Wordy board calibration requirements, automated
-release checks and pending manual acceptance are recorded in the
-[upgrade guide](RELEASING.md#upgrading-to-0220).
+Dependency ownership and update boundaries are recorded in the
+[inventory](DEPENDENCY_INVENTORY.md) and [maintenance plan](MAINTENANCE_PLAN.md).
+Runtime npm packages, vendored browser libraries and offline authoring tools have
+separate installation paths. The [Colyseus 0.18 upgrade record](COLYSEUS_018_ASSESSMENT.md)
+records core 0.18.18, transport 0.18.4, server schema 5.0.40 and vendored SDK 0.18.5.
+Explicit table/editor static authentication, refreshed reconnect tokens, private-hand
+hydration and leave-handler ordering preserve existing authority and privacy boundaries.
+Physics and persisted snapshot formats are unchanged. The app requires
+Node 24 or newer, with Node 24 selected by `.nvmrc`, Docker, CI and fresh Debian/Ubuntu
+native provisioning. CI also tests the built Alpine image; newer distro runtimes
+remain possible but require deployment verification. Native updates validate the
+service runtime before backup or release activation; they do not install a new Node version.
 
-The [living hardening plan](../HARDENING_PLAN.md) records the account/host-approval walkthrough
+Prepared release 0.23.0 keeps the server/browser ownership and single-instance
+boundaries. Node 24+ and the coordinated Colyseus 0.18 server/browser pair require
+an app restart and client refresh. Additive migrations 024–027 persist room style
+and extend the accepted choices; table/sky/lighting and private saved state retain
+their existing owners. The new scenery remains browser-owned, unpickable and outside
+physics/rules. Version/image metadata, local verification and deployment/rollback
+steps are recorded in the [upgrade guide](RELEASING.md#upgrading-to-0230).
+
+The [living hardening plan](HARDENING_PLAN.md) records the account/host-approval walkthrough
 and proposed session-cookie, CSRF and multiplayer authentication changes. It distinguishes
 observed behavior from conditional risks and pending designs; current authentication behavior
 remains unchanged until implementation and verification are recorded.
@@ -71,7 +85,7 @@ incomplete exclusions for local Docker build material and upgrade dumps that do 
 complete recovery checkpoints (HARD-44–46). Separate database connections, non-root execution,
 transactional migrations and guarded installer recovery remain protections. Runtime credential
 isolation, image-canary checks and coordinated restore drills remain proposed work.
-The [consolidated implementation sequence](../HARDENING_PLAN.md#consolidated-implementation-sequence)
+The [consolidated implementation sequence](HARDENING_PLAN.md#consolidated-implementation-sequence)
 orders the 46 findings into bounded fixes, authority/data preservation, coordinated sessions
 and resource controls, then remaining reliability work. Privacy/identity policies are a separate
 decision track. It preserves the HTTP/multiplayer authentication boundary and the distinction
@@ -195,7 +209,10 @@ for migration roles, source dependencies, SMTP forwarding and outstanding accept
 
 The public marketing website and wiki are a separate static surface in `website/`.
 They use plain HTML, one shared stylesheet, the existing app logo for header/footer branding,
-and derivatives of existing project artwork.
+and derivatives of existing project artwork. The homepage progressively enhances its static
+chess figure with the local `showcase.js` module; wiki pages remain script-free. Its meta CSP
+allows scripts only from the site's own origin, without inline code or external dependencies.
+The game application's CSP is unchanged.
 They do not connect to the room server, authentication, database, or asset-upload endpoints.
 The website can be served from its own document root or subdirectory without changing the
 game application's routes, CSP, build-free client, or deployment requirements. Wiki content
@@ -204,10 +221,15 @@ renderer or automatic synchronization. See [website maintenance](../website/READ
 [2026-09-29 wiki audit](../website/WIKI_AUDIT.md) for page-level evidence and limits.
 The audit separates room snapshots, scene templates, durable room settings and transient
 notebooks/chat/whiteboard state, without changing those persistence boundaries.
-Original gameplay captures in `website/assets/showcase/` are static assets from dedicated
-local rooms. The approved landing layout uses a chess hero and responsive cards/dice gallery;
-the Assets and scenes guide includes the library capture. These images do not connect the
-website to the app. See the capture README for provenance and attribution.
+The original four gameplay captures in `website/assets/showcase/` came from dedicated
+local rooms. Four additional approved Go, Dominoes, Mahjong and Wordy mockups use the
+production renderer and bundled models in isolated staged scenes, without a multiplayer
+connection. The landing hero cycles through seven images; the cards/dice gallery and wiki
+library capture retain their placement. Playback, selection and motion preferences are local
+website state. Images decode before display; failed loads retain the current image and stop
+playback. Manual navigation stops playback, focus/hover/hidden tabs suspend it, and reduced
+motion starts paused. A static chess figure remains when scripts are unavailable. These images
+do not connect the website to the app. See the capture README for provenance and attribution.
 
 ## Two worlds, kept apart
 
@@ -433,7 +455,7 @@ importing a room singleton:
   calibrated state drives server snapping, browser previews and persistence; no new schema is needed.
 - **`server/game/piece-operations.js`** — authoritative recoloring and self-righting policy.
   It resolves effective and natural stand modes from synchronized props and shared piece
-  definitions, and applies validated color/team/material `colorProps` results through the
+  definitions, and applies validated color/team/material `applyAppearancePatch` results through the
   piece-props codec. Bundled and uploaded model props, modeled dispensers/stacks, and pipped dice
   use the shared standard-finish allowlist; dice-only custom textures cannot enter the model-object
   override path.
@@ -601,6 +623,12 @@ importing a room singleton:
   the client keeps general role
   gates, table/track resize orchestration, and Lean In; the render loop calls `presence.update()`
   after interpolation so held-piece labels follow the current meshes.
+  Approved seated camera defaults use a shallower angle and an eight-unit height
+  cap independent of large-table scaling; join/seat changes/My Seat share that
+  helper. Birds Eye keeps its separate aspect-aware overhead fit. Camera state
+  remains local. Cozy's lower physical table height is expressed through a closer
+  floor, shorter supports and floor-relative openings/furnishings, preserving the
+  server-owned tabletop/physics Y=0 and all gameplay coordinates.
 - **`public/table/selection.js`** — local selection, Select-tool mode, marquee gestures, highlight
   rings, batch commands, and toolbar/recolor state. Its mode bindings also own the floating
   Multi-Select button above Seat, including active styling and accessible pressed state; the
@@ -615,8 +643,146 @@ importing a room singleton:
   graphics grid construction, and shared lighting/board definitions. Room changes go through the
   existing server messages; resize, whiteboard-panel, and overlay-label effects use injected callbacks.
 - **`public/table/skybox.js`** — background texture loading, resolution caps, replacement/disposal,
-  and viewer-local resolution controls. The client forwards synchronized refs and publishes its
+  and viewer-local resolution/orientation controls. Nonzero tilt/rotation uses an owned,
+  camera-centered sky mesh with the bundled shaders; zero uses the native background.
+  The client forwards synchronized refs and publishes its
   built-in catalog; the library retains asset selection and authorization-aware presentation.
+- **`public/rendering/rooms/`** — bundled room-theme framework, currently shipping
+  shared per-room Standard/Cozy/Poker Night selection. `room-backdrop.js` switches/disposes
+  the active runtime from public `State.environment`; `room-themes.js` resolves static
+  theme IDs. `room-environment.js` owns lifecycle, dimensions, shadow bounds and
+  cutaways; `room-assembly.js` owns batching/model replacement/device policy;
+  `room-seating.js` owns occupied chair clones. `cozy-theme.js` supplies the six
+  agreed components: structure, openings, play area, furnishings, decoration and
+  atmosphere. Named wall/sill/shelf anchors keep transforms and cutaways attached
+  to supports. Optional components can be absent, including in a ground-only theme.
+  `cozy-room.js` retains a thin compatible `createCozyRoom` wrapper. Theme palettes
+  are owned alongside the hierarchy, including unused materials on cleanup or a
+  failed build. Table styles remain independent; only the approved settings action
+  uses optional theme wood/felt metadata through existing authorized messages.
+  `roomEnvironment {environment}` uses the existing gameplay capability and live
+  GM/owner guard; exact whitelisted values schedule the existing durable save.
+  `rooms.room_environment` (migration 024) defaults to Standard. Portable scenes,
+  game snapshots and reset leave this per-room configuration alone. Old preview URLs
+  cannot override shared state. See [ROOM_THEMES.md](ROOM_THEMES.md).
+  [PLAN_ROOM_THEMES.md](PLAN_ROOM_THEMES.md) records the proposed expansion and
+  approved Poker Night design. `poker-night-theme.js` supplies a second six-component
+  definition using the shared surface geometry, assembly and seating owners, with
+  original procedural fallbacks, eight approved Blender furnishing GLBs and reused
+  wood/plaster textures and plant GLB.
+  It adds no lighting override, physics, picking or input path. Migration 025
+  extends the room-environment constraint; apply it, restart and refresh clients.
+  Blender authoring sources remain separate from runtime derivatives;
+  [their plan](PLAN_ROOM_THEMES.md#blender-asset-redesign-review) records approval,
+  publication and the owner-edited curtains/tiebacks.
+  The approved [Medieval Tavern source](PLAN_ROOM_THEMES.md#medieval-tavern-blender-mockup)
+  supplies eight optimized furnishing GLBs to `medieval-tavern-theme.js`. It reuses
+  the same lifecycle, occupancy, late-load cleanup, phone policy and cutaways;
+  dynamic shell geometry and bounded stone/post instancing retain table resizing.
+  Static fire/candle emission adds no light or simulation. Review lighting and
+  the trestle table do not alter the app's lighting, table, physics or shared-state
+  owners. Additive migration 026 extends the public room-environment whitelist.
+  Tavern trestles are decorative assembly geometry fitted against shared
+  `tableOutline`/`inTable` and the existing tabletop underside. They add no server
+  collider or input path. Window wall thickness and framing exclusion account
+  for the complete authored surround; the revised shutter model comes from a
+  separate copy preserving the owner's unsaved state and original approval source.
+  The latest derivative mirrors the right shutter to the reviewed left leaf.
+  Rough-opening edges end within solid timber on all four sides; real-model
+  reveal ray tests prevent coincident plaster/jamb faces as well as depth overlap.
+  The approved Modern Bar sources in companion `modern_bar_v1/` and
+  `room_backwalls_v1/` supply thirteen
+  optimized GLBs to `modern-bar-theme.js` through the same assembly/seating
+  owners. The shell uses bounded instanced brick, shared walnut floor/panels,
+  a recessed window opening and adaptive decorative steel pedestals. Attached
+  furnishings follow their wall/ceiling cutaways. Review lights/table/city and
+  fixed seat roster are excluded; saved sky/lighting/table remain independent.
+  A separate Blender detail revision supplies the corrected chair and table
+  pendant. Back piping follows the beveled cushion; satin brass has no coarse
+  relief maps. These are model replacements through existing owners, with no
+  new runtime helper, physics, lighting or server-state behavior.
+  Migration 027 extends the environment constraint; matching is Walnut/deep teal.
+  Room enclosure depth now follows shared `tableOutline` for width-sized hexes,
+  preventing the walls/floor from clipping wide hex tables with a small saved
+  depth. Other shape sizing and server geometry are unchanged.
+  The client injects a `GLTFLoader` and forwards table dimensions/shape during
+  hydration and state patches, then applies cutaways after camera updates and before
+  rendering. Supports reuse shared `inTable`; cleanup reuses `disposeHierarchy`
+  and `releaseCanvasOnDispose`, also releasing instance buffers. This scenery has
+  no physics, inventory, private game content, lighting overrides or gameplay input.
+  The client also injects presence's `seatLayoutFor`; `sync` reconciles occupied
+  player seats on state patches while room geometry rebuilds only on size/shape changes.
+  Chair placement projects the existing hand positions onto shared `inTable` boundaries
+  and faces inward. Spectators/unseated players have no chair. A hidden room-owned
+  chair template retains loaded/fallback geometry and materials; roster changes
+  release only each removed copy's instance buffers, never shared resources.
+  The companion `cozy-room-surfaces.js` creates PBR materials, dimension-aware plaster
+  panels, bounded instanced staggered boards and extruded trim profiles. The room
+  hierarchy owns their resources. Clear window glazing reveals the existing sky
+  directly; no outdoor image, new light, refraction render pass or sky override is added.
+  The owner's fixed Blender [furnishings](ART_DIRECTION.md) replace chairs, the shelf
+  and lamp after successful loads; the separate shell source supplies oak casement frames.
+  Companion `cozy_ceiling_v1/cozy-vaulted-ceiling.blend` supplies the approved
+  exposed-beam/twin-skylight ceiling. `export_runtime.py` adds fit metadata in a
+  derivative; `rooms/cozy-ceiling.js` fits separate parts to room dimensions with
+  fixed beam sections/UV density and batches them by material. Shared assembly's
+  optional placement preparer releases displaced source resources. The structure
+  returns a ceiling owner/two normalized outward slope planes/peak bound; the existing
+  camera update keeps it below the actual pitched roof and hides it after crossing
+  either slope. Walls use the same signed-distance visibility rule, with gables
+  sharing their wall's planes. A small interior inset avoids entering plaster;
+  a hysteresis band prevents flicker on re-entry. Camera aim/overhead angle alone
+  no longer removes visible room edges. Room cleanup still owns every batch.
+  Desktop clear alpha glazing and empty phone apertures preserve the room skybox;
+  no refraction pass, new light, input or synchronized ceiling state is added.
+  The shelf is compiled offline from the corrected frame and miniature built-in
+  game assets. Its display meshes/textures belong entirely to that loaded room
+  hierarchy; runtime gameplay factories/caches are not coupled to scenery cleanup.
+  Shelf image dimensions are bounded offline at 512px to limit decode/upload pressure.
+  Bundled models now ship once at their existing canonical URLs, including the
+  7.49 MB compressed `cozy-game-shelf.glb`. Duplicate uncompressed payloads and
+  temporary derivative paths have been removed. The shared `createModelLoader()`
+  enables the self-hosted 0.24.0 JavaScript Meshopt decoder only for exact URLs
+  in `BUILTIN_MODEL_URLS`; other refs retain an ordinary GLTFLoader. The decoder
+  uses no WebAssembly, eval, workers or extra CSP permissions. Gameplay, previews,
+  collider editing and rooms share the adapter, while existing owners keep stale
+  callback/material/resource disposal. Server physics constants remain unchanged;
+  offline collider measurement reads preserved GLB JSON bounds and transforms.
+  `models/manifest.json` records final/source hashes, decoded fingerprints and
+  browser baselines. The versioned offline publisher under `tools/model-authoring/`
+  has its own pinned package/lockfile, resolves the app from its repository root
+  and stays outside the Docker image and app runtime dependency graph. It verifies source/candidate
+  geometry, images, materials, animation and strict-CSP GPU loading before writing
+  the one final GLB, manifest and allowlist. See [model workflow](../public/static_assets/models/README.md),
+  [ART_DIRECTION.md](ART_DIRECTION.md) and [ASSET_CREDITS.md](ASSET_CREDITS.md).
+  No KTX2 or app build step is introduced; decoded GPU memory does not shrink.
+  Core's injected `deviceClass` selects a phone shader fallback, independently of
+  graphics quality. It retains base art/cutouts and scalar metal response, omits
+  physical layers/detail-map shading and scenery shadow reception, and leaves clear
+  window openings without drawing blended panes. `prepareModelMaterials` shares
+  replacements within each owned model, disposing only replaced materials and maps
+  no retained material references. Desktop/tablet preserve authored detail; ownership
+  never crosses into gameplay caches or source assets.
+  Desktop/tablet furnishings cast real shadows. The injected
+  `setSceneryShadowBounds` callback lets core fit its existing shadow camera around
+  the room in light-view space, including lighting changes, without overriding
+  quality/map size or lighting preferences; clear restores table-only bounds.
+  `cozy-room-shadows.js` attaches bounded instanced contact footprints to each owner
+  on all devices. Their single tiny map/material/plane are owned by the room and
+  shared with chair clones. Fallback swaps preserve them and wall cutaways hide them
+  with their supports. Phones retain contact shading without scenery shadow passes.
+  The rug's room-owned procedural canvas uses 1024px on desktop/tablet, 512px on
+  phones, with finer weave and device-bounded anisotropy; it adds no detail-map
+  shader paths. Core's solid felt slab casts as well as receives shadows, blocking
+  light and tabletop-piece silhouettes from passing through to the room floor.
+
+  Three original botanical GLBs reuse the same slot/load/disposal path for six varied
+  floor/sill/shelf placements. Wall-supported plants inherit their wall's cutaway;
+  floor-corner plants remain independent. The client injects the renderer's texture
+  anisotropy capability, capped at eight for loaded model maps. The shelf UV correction
+  is a separate derivative of the owner's fixed source, preserving geometry/materials.
+  Copies share resources within one owned room root;
+  stale completions are disposed. Procedural furnishings remain available on load failure.
 - **`public/table/overlays.js`** — measurement geometry, rendered-board surface elevation,
   selection, drag previews, permissions, and overlay state/message bindings.
 - **`public/table/whiteboard.js`** — whiteboard mesh, local stroke replay, ownership/camera mode,
@@ -878,8 +1044,14 @@ the per-tick `world.step` time and the awake-body count that drives it. So the r
 (graphics-quality tiers) and the simulation lever are aimed at genuinely different bottlenecks,
 and each is profiled on real hardware, not in the headless suites. A first pass found the client
 frame **fill-rate bound, not draw bound** (FPS flat as draw calls rose), so the shadow map now
-redraws only on frames where scene geometry moved (`shadowMap.autoUpdate = false`, driven from the
-render loop), and `?px` / `?shadow` / `?aa` expose pixel ratio, shadow size, and antialias for
+uses `shadowMap.autoUpdate = false` with persistent per-piece state in the render loop.
+After interpolation, animation and visibility updates, exact hierarchy/geometry identities and
+local transforms detect motion, hidden/visible changes, mesh replacement, removal and late model
+loads. Per-piece comparisons avoid cancellation between opposing moves; removed cache entries
+are discarded. Camera orbit reuses the map, while lighting/quality/context-restoration requests
+still explicitly refresh it. `test/render-loop.js` exercises the production loop through stubbed
+renderer/controller adapters; it does not measure real GPU cost.
+The `?px` / `?shadow` / `?aa` knobs expose pixel ratio, shadow size, and antialias for
 tuning on the target device.
 That tuning is now a shipped, client-local **quality tier** (low/medium/high/ultra-high, persisted per device,
 defaulting to Low on phones, Medium on tablets, and High on desktops) in Settings → UI.
@@ -1346,6 +1518,13 @@ and owned face textures are disposed through `createCardBrowsePreview`. Its sync
 cache detachment prevents concurrent table pieces from borrowing a transient preview texture;
 already-resident shared textures remain untouched. Image slots contain the entire snapshot
 without a card-frame or hex clip.
+Library set and starter cards share `tilePairPreview`, which queues two authored
+tile snapshots through the existing `fillAsync` observer and cancellation lifecycle.
+The pair uses the existing contained deck-preview layout in full/compact and touch modes.
+Active Mahjong face IDs retain their historical PNG spelling solely as model keys.
+`mahjongFaceLabel` supplies procedural text faces during loading/failure, so mesh and
+synchronous preview creation never fetch the 42 retired PNGs. Thumbnail URL mapping
+rejects those IDs and their derivative aliases; normal Library previews use GLBs.
 Dimensions remain
 in `TILES`/`props.geom`; Domino now uses the owner's half-extents 0.25 × 0.5 × 0.05
 (full width × length × thickness 0.5 × 1 × 0.1), shared by rendering and colliders.
@@ -1395,8 +1574,9 @@ library Set selector adds one of each bonus for 144. The spawn-only `bonusTiles`
 strictly boolean and accepted only for `set: 'mahjong'`; `spawnPayload` normalizes it and
 `createPieceLifecycle.spawn` passes it to `buildMahjongWall`. Private inventory persists
 the actual refs/count through existing save/restore, without needing a variant flag.
-Plum/bamboo have new refs and image fallbacks; old peony/lotus refs retain their original
-image fallback rather than being reassigned to different flowers. Three red-five GLBs are reserved and
+Old peony/lotus refs retain their two original PNGs rather than being reassigned to
+different flowers. All 42 active faces, including plum/bamboo, use generated text
+fallbacks; their former PNGs have been removed. Three red-five GLBs are reserved and
 do not alter the default inventory or model allowlist. Mahjong's Build wall action uses a
 separate server operation and shared layout; see [Mahjong wall](MAHJONG_WALL.md).
 A selection can share the picker only within one registered family. Existing DOM IDs/CSS
@@ -1486,6 +1666,15 @@ as they were — trays already ride a circular track — so the first cut keeps 
 the new shapes. The rim is a GM-selectable **wood** (`state.rimWood`, five textures, durable + in
 scenes) swapped on the shared material; the felt is a desaturated fabric texture tinted by the felt
 color (mirrored-wrapped + gradient-flattened for seamless tiling).
+`TABLE_CORNER_SEGMENTS` samples rounded corners at 20 segments per quarter in the
+shared outline, including server wall geometry and browser grid clipping. Pure
+`public/rendering/table-geometry.js` keeps the felt's top at y=0 and lofts a closed,
+bevelled visual rail around that boundary. Perimeter-distance UVs align wood grain;
+world-unit felt UVs retain physical density. Core retains material/texture-cache
+ownership and existing synchronized wood/color setters. Fine felt bump shading is
+desktop/tablet-only, preserving the phone shader policy. Shared-outline changes
+require a server restart as well as client refresh.
+
 
 ## Live table tools
 
@@ -1572,6 +1761,11 @@ machinery:
   and resolution changes invalidate pending loads even when the synchronized ref stays the same.
   Ultra retains native source resolution, including larger custom uploads. The bundled skies are
   2048×1024, so their High and Ultra results match; higher-resolution upload support is complete.
+  Tilt and rotation are viewer-local device preferences, like camera and quality, and
+  never enter room state or snapshots. The sky controller samples the original loaded
+  texture through an inverse rotation in a background mesh for Three r161 compatibility;
+  it owns and disposes the mesh geometry/material alongside texture replacement or Off.
+  Native sliders and degree fields handle mouse, keyboard, and touch without new table intents.
 - **Scoreboard & room notes** (shared, durable) — a `scores` map (label/score
   rows) and a GM `notes` string, both synced and saved with the room.
 - **Chat** (shared, ephemeral) — public room text. A `chat` message is sanitized
@@ -1841,7 +2035,7 @@ inline-image writer were removed; current editor saves use uploaded references t
 curation permissions, and asset-specific load/spawn rules remain visible in the library handlers.
 
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
-notes, table size and shape, rim wood, skybox, felt color, and owner-selected lighting default — plus the GM/auto-save **game
+notes, table size and shape, rim wood, skybox, felt color, room style, and owner-selected lighting default — plus the GM/auto-save **game
 snapshot** (see "Scene vs. game snapshot"), in the `rooms` row (via `getRoomState`/
 `saveRoomState`, debounced by the room's `scheduleSave`). So those survive a
 restart or an empty-table reset; live pieces and hands stay in memory during a
@@ -1851,6 +2045,13 @@ Table shape, rim wood, and default lighting are read directly from their `rooms`
 room-state loading. Their restoration is independent of a scene snapshot, so an unsnapshotted
 room retains those choices. When present, a scene can still apply its own saved table settings
 afterward; a scene without lighting leaves the current lighting unchanged.
+Room style is public `State.environment`, persisted as `rooms.room_environment`
+(migration 024, extended by 025 for Poker Night, Standard default). Its GM/owner-guarded `roomEnvironment` message
+uses the existing gameplay capability gate and save queue. It stays outside both
+portable scenes and game snapshots; loads and reset preserve the destination
+room's style. Browser backdrop owners follow it, disposing old scenery on switches.
+The approved Room style select mirrors authoritative patches, and legacy cozy
+preview URLs no longer override the stored choice.
 
 Because unreferenced `/assets` files pile up as the library and tables churn
 (deleted decks, replaced skyboxes), an admin **orphan cleanup** (`/admin/orphans`)
@@ -2562,6 +2763,24 @@ fixture is separate from actual browser enforcement, HTTPS termination and trust
 Remaining optional hardening: post-parse model complexity limits, per-user storage
 caps. Defense in depth, not provably safe.
 
+## Regression coverage boundaries
+
+`test/backend-interaction-policy.js` owns the complete TableRoom registration inventory,
+duplicate-name checks, capability classification and shared error-boundary checks, including
+rejection of legacy inline `assetMessage` calls. Handler suites retain behavior and failure
+coverage rather than duplicating ordered registration lists or pinning an inline-handler count.
+
+Browser fixtures reuse production composition seams: collider checks call
+`createTableShell().prepare()` for number inputs, and the device matrix compares
+`createUiSurfaces().isSheet()` with actual CSS across independent width/pointer profiles.
+Collider upload fixtures unpack the actual bundled GLBs offline through the existing
+GLB/decoder helpers and verify their decoded integrity, preserving ordinary upload-loader
+restrictions. Unexpected alerts fail the fixture instead of blocking a headless browser.
+Component scenes assert behavior and rendered state, including visible Library swatches;
+computed-style snapshots are captured only when explicitly requested with `--out`.
+Standalone material, tile-skin and GPU-memory checks retain their distinct resource/appearance
+coverage. These fixtures do not establish real-device gesture feel or multiplayer acceptance.
+
 ## Adding things
 
 - **A new piece type:** one `KINDS` entry (mass + shape) + one client `KIND`
@@ -2701,6 +2920,20 @@ boundary. No concealed face or deck order is included in sound messages. Group f
 by material; shuffle animation is unchanged. Six original static OGGs are generated offline and
 played with the existing per-viewer volume/mute preferences. See [checkpoint](DESIGN_placards_sounds.md).
 
+The user approved the three rear-wall Blender layouts on 2026-10-17. They are now
+integrated locally: Modern Bar glass entry/left corner nook, Poker Night windowed
+walnut door and a second instance of the corrected Tavern window. Three additional
+canonical GLBs use existing loading/resource owners; the two Tavern placements
+share one model load. `rooms/wall-openings.js` supplies `wallOpeningPanels` to
+clip plaster, wainscot and trim around apertures. Frames hide reveal boundaries;
+wall children inherit cutaways. Modern nook coordinates adapt to room extent,
+with named half-width/margin/inset values preserving table and seating clearance.
+Door glazing has no depth write/shadows and is omitted on phones. Decorative doors
+add no interaction, collider, server state or runtime light. Selected sky/lighting,
+existing source materials and previous curtain/chair/window corrections remain.
+This addition needs only a client refresh, with no extra migration/restart. See
+[approved integration and verification](PLAN_ROOM_THEMES.md#rear-wall-integration).
+
 
 ## Demo entry presentation boundary
 
@@ -2717,17 +2950,15 @@ server validation remains required. Known error codes map to fixed text, never r
 messages; host names are inserted as text. Destroy aborts the caller signal, cancels the timer
 and detaches listeners. The visual countdown is advisory; server expiry is still authoritative.
 
-This is a staged UI component, not an enabled demo mode. The only current caller is the
-local browser fixture in `test/fixtures/demo-entry.*`, served on loopback by the existing
-headless-test static server. It has no database or authentication wiring and does not access
-browser credentials. The fixture offers explicitly simulated states for review. Production
-entry registration awaits guest HTTP restrictions, expiry/disposal handling and navigation.
+`public/demo/bootstrap.js` mounts the production entry and owns HTTP/session/navigation;
+`test/fixtures/demo-entry.*` mounts the same component in a loopback preview with simulated
+states. The fixture creates no real guests or tables. Production guest restrictions and
+expiry/disposal remain in the server boundaries described below.
 
 
 ## Enabled demo runtime
 
-`DEMO_MODE=true` now registers the entry component and approved table controls. The preceding
-presentation-only section describes the earlier staged slice. See the [current demo contract](DEMO_MODE_PLAN.md#current-runtime-2026-09-29).
+`DEMO_MODE=true` registers the entry component and approved table controls. See the [current demo contract](DEMO_MODE_PLAN.md#current-runtime-2026-09-29).
 `createDemoRuntime` owns durable occupancy and ordered cleanup: close credentials, revoke,
 disconnect, wait for the writer registry, then purge marked data. Migration 025 records the
 last occupied time so a restart cannot restart the idle clock. Shared capability checks and a
@@ -2746,3 +2977,21 @@ account session before clearing browser state; rejected non-admin logins are rev
 
 The demo entry reuses the application's existing small logo for its favicon and
 full wordmark for its header. Branding adds no asset pipeline or dependency.
+
+## Demo room choice and 0.23.0 synchronization
+
+The demo landing component owns two independent creation inputs: furnished room style
+and starter contents. `shared/room-environments.js` derives the demo choices from the
+canonical IDs; `isDemoRoomEnvironment` validates the four furnished styles and the
+server defaults omitted creation requests to Cozy. Ordinary rooms retain Standard.
+The existing atomic demo transaction stores the choice in `rooms.room_environment`,
+and the existing room-state loader publishes it to all occupants. Invites and resumed
+sessions inherit the persisted setting. The entry bootstrap forwards the field through
+the existing HTTP adapter; it owns no additional shared state or authentication rule.
+
+This branch includes main 0.23.0 with the matching Colyseus 0.18 client/server and
+Node 24+ requirement, preserving the existing demo admission, dice, expiry, disposal
+and capacity boundaries. Migration identity remains the full filename: deployed Demo
+024/025 files coexist with main 024–027 files in the 29-entry fresh ledger.
+The picker adds no migration, renderer, protocol field or runtime service.
+See [current implementation and deployment checks](DEMO_MODE_PLAN.md#main-synchronization-2026-10-17).

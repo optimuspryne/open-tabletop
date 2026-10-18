@@ -117,6 +117,7 @@ const messagesByCapability = {
     'score',
     'roomNotes',
     'table',
+    'roomEnvironment',
     'tableColor',
     'lightingApply',
     'lightingRestore',

@@ -1,6 +1,7 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–025, meant for a FRESH
+-- This is the flattened end state of migrations 001–027 (including Demo 024/025),
+-- meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -65,6 +66,7 @@ CREATE TABLE rooms (
   scene             jsonb,      -- GM's saved table snapshot (table size + pieces + transforms); null = none
   scale             jsonb,      -- durable per-room measurement scale { worldPerUnit, unitLabel, roundStep, cellWorld, gridStyle }; null = defaults
   room_lighting     jsonb       NOT NULL DEFAULT '{"preset":"neutral","azimuth":130,"elevation":55,"keyIntensity":1,"keyColor":"#ffffff","ambientIntensity":1,"ambientColor":"#ffffff","shadowSoftness":0.55}'::jsonb,
+  room_environment  text        NOT NULL DEFAULT 'standard' CHECK (room_environment IN ('standard', 'cozy', 'poker-night', 'medieval-tavern', 'modern-bar')),
   created_at        timestamptz NOT NULL DEFAULT now(),
   deleted_at        timestamptz
 );
@@ -293,7 +295,7 @@ CREATE INDEX demo_guests_room_idx ON demo_guests(room_id);
 -- Preserve the last observed occupancy across process restarts.
 ALTER TABLE demo_rooms ADD COLUMN last_occupied_at timestamptz;
 
--- This baseline IS the flattened result of migrations 001–025, so record them as
+-- This baseline IS the flattened result of migrations 001–027, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -310,6 +312,8 @@ INSERT INTO schema_migrations (version) VALUES
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
   ('014_room_table_shape.sql'), ('015_room_rim_wood.sql'),
   ('016_room_lighting.sql'), ('017_collider_presets.sql'),
-  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql'), ('022_notecard_templates.sql'), ('023_account_recovery.sql'), ('024_demo_sessions.sql'), ('025_demo_occupancy.sql');
+  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql'), ('022_notecard_templates.sql'), ('023_account_recovery.sql'), ('024_demo_sessions.sql'), ('024_room_environment.sql'), ('025_demo_occupancy.sql'), ('025_poker_night.sql'),
+  ('026_medieval_tavern.sql'),
+  ('027_modern_bar.sql');
 
 COMMIT;

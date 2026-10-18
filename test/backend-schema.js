@@ -35,6 +35,7 @@ const STATE_FIELDS = [
   'scale',
   'overlays',
   'lighting',
+  'environment',
 ];
 
 test('State preserves synchronized defaults and collection construction', () => {
@@ -45,6 +46,7 @@ test('State preserves synchronized defaults and collection construction', () => 
   }
   assert.deepEqual(
     {
+      environment: state.environment,
       turn: state.turn,
       notes: state.notes,
       tableX: state.tableX,
@@ -57,6 +59,7 @@ test('State preserves synchronized defaults and collection construction', () => 
       turnPending: state.turnPending,
     },
     {
+      environment: 'standard',
       turn: '',
       notes: '',
       tableX: TABLE.x,
@@ -146,6 +149,7 @@ test('schema reflection round-trips every synchronized class through an authoriz
   state.trays.set('2', true);
   state.unclaimed.set('42', 'Departed');
 
+  state.environment = 'cozy';
   const encoder = new Encoder(state);
   const decoder = Reflection.decode(Reflection.encode(encoder));
   const view = new StateView();
@@ -169,4 +173,33 @@ test('schema reflection round-trips every synchronized class through an authoriz
   assert.ok(state.whiteboard instanceof Whiteboard);
   assert.ok(state.scale instanceof RoomScale);
   assert.ok(state.lighting instanceof Lighting);
+});
+
+test('room style patches reach every viewer and late joins hydrate the current choice', () => {
+  const state = new State();
+  const encoder = new Encoder(state);
+  const viewers = Array.from({ length: 2 }, () => Reflection.decode(Reflection.encode(encoder)));
+  const initial = encoder.encodeAll();
+  viewers.forEach((viewer) => viewer.decode(initial));
+  encoder.discardChanges();
+  for (const environment of [
+    'cozy',
+    'poker-night',
+    'medieval-tavern',
+    'modern-bar',
+    'standard',
+    'modern-bar',
+  ]) {
+    state.environment = environment;
+    const patch = encoder.encode();
+    viewers.forEach((viewer) => viewer.decode(patch));
+    encoder.discardChanges();
+    assert.deepEqual(
+      viewers.map((viewer) => viewer.state.environment),
+      [environment, environment],
+    );
+  }
+  const lateJoin = Reflection.decode(Reflection.encode(encoder));
+  lateJoin.decode(encoder.encodeAll());
+  assert.equal(lateJoin.state.environment, 'modern-bar');
 });

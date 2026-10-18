@@ -48,6 +48,8 @@ export function clearGameTable(room) {
   room.scheduleSave();
 }
 
+// Persistence payloads include private deck order, concealed fronts and notecard content;
+// never broadcast them as public room state. serializeGame adds account-owned hands and turn.
 export function serializeScene(room, { includeLighting = false } = {}) {
   const pieces = [];
   room.state.pieces.forEach((piece, id) => {

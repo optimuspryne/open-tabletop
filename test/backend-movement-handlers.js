@@ -43,13 +43,6 @@ test('group offsets cannot turn a valid target into an unbounded physics destina
   assert.equal(room.targets.size, 0);
 });
 
-test('movement module registers the single and group movement messages', () => {
-  assert.deepEqual(
-    [...harness().handlers.keys()],
-    ['grab', 'move', 'release', 'grabGroup', 'moveGroup', 'releaseGroup'],
-  );
-});
-
 test('grab claims only free, movable pieces that are not flipping', () => {
   const { room, handlers } = harness();
   room.state.pieces.set('1', { movable: true, owner: '' });

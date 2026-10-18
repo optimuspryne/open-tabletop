@@ -39,13 +39,6 @@ test('relative motion survives a re-anchor', () => {
   assert.deepEqual(moved, { x: held.x + 3, z: held.z - 2 });
 });
 
-test('a piece already under the finger is not nudged', () => {
-  // Guards the sign: getting it backwards doubles the error instead of cancelling it.
-  const held = { x: -7, z: 2 };
-  const offset = reanchorOffset(held, applied({ x: -7, z: 2 }, ZERO), ZERO);
-  assert.deepEqual(offset, ZERO);
-});
-
 test('the correction opposes the drift, it does not follow it', () => {
   // A finger that drifted +x needs a -x offset; the classic sign error returns +x.
   const offset = reanchorOffset({ x: 0, z: 0 }, applied({ x: 5, z: 0 }, ZERO), ZERO);

@@ -302,7 +302,6 @@ dnf() { echo "dnf $*"; }
 pacman() { echo "pacman $*"; }
 curl() { touch "\${@: -1}"; }
 gpg() { while [[ "$1" != -o ]]; do shift; done; touch "$2"; }
-node() { echo 26; }
 install_packages`,
       { ...f.env, DISTRO: id },
     );
@@ -311,13 +310,61 @@ install_packages`,
     if (id === 'debian' || id === 'ubuntu') {
       assert.match(
         readFileSync(join(f.root, 'etc/apt/sources.list.d/nodesource.sources'), 'utf8'),
-        /node_26/,
+        /node_24/,
       );
       const entries = readdirSync(join(f.root, 'etc/apt/sources.list.d'));
       assert.equal(entries.includes('pgdg.sources'), profile === 'proxmox');
     }
   });
 }
+
+for (const [version, accepted] of [
+  ['20.19.0', false],
+  ['22.13.0', false],
+  ['23.11.0', false],
+  ['24.0.0', true],
+  ['24.19.0', true],
+  ['26.11.1', true],
+]) {
+  test(`native runtime gate ${accepted ? 'accepts' : 'rejects'} Node ${version}`, (t) => {
+    const f = fixture(t);
+    const node = join(f.root, 'usr/bin/node');
+    rmSync(node);
+    writeFileSync(
+      node,
+      `#!/bin/sh
+exec ${quote(process.execPath)} -e 'Object.defineProperty(process.versions, "node", { value: process.env.MOCK_NODE_VERSION }); eval(process.argv[1]);' "$2"
+`,
+      { mode: 0o755 },
+    );
+    const run = bash('source "$ROOT/installer.sh"; validate_node_runtime', {
+      ...f.env,
+      MOCK_NODE_VERSION: version,
+    });
+    if (accepted) assert.equal(run.status, 0, run.stderr);
+    else {
+      assert.notEqual(run.status, 0);
+      assert.match(run.stderr, /Node.js 24 or newer is required/);
+    }
+  });
+}
+
+test('native upgrade rejects an old runtime before backup, install or activation', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run('install').status, 0);
+  const current = readlinkSync(join(f.root, 'opt/open-tabletop/current'));
+  const config = readFileSync(join(f.root, 'etc/open-tabletop/open-tabletop.env'), 'utf8');
+  writeFileSync(join(f.root, 'calls'), '');
+  const node = join(f.root, 'usr/bin/node');
+  rmSync(node);
+  writeFileSync(node, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  const failed = f.run('upgrade');
+  assert.notEqual(failed.status, 0);
+  assert.match(failed.stderr, /Node.js 24 or newer is required/);
+  assert.equal(readlinkSync(join(f.root, 'opt/open-tabletop/current')), current);
+  assert.equal(readFileSync(join(f.root, 'etc/open-tabletop/open-tabletop.env'), 'utf8'), config);
+  assert.doesNotMatch(readFileSync(join(f.root, 'calls'), 'utf8'), /dump|npm|systemctl/);
+});
 
 for (const [id, dataDir, expected] of [
   ['fedora', 'var/lib/pgsql/data', /postgresql-setup --initdb --unit postgresql/],

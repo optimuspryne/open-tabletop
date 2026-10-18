@@ -1312,6 +1312,7 @@ a {
 }
 /* Graphics presets and Apply are text-only controls, including in compact mode. */
 #qualityRow .lbl,
+#skyResRow .lbl,
 #qualityApply .lbl {
   display: inline;
 }
@@ -3260,6 +3261,48 @@ body.admin {
 .volRow input[type='range'] {
   flex: 1;
   min-width: 0;
+}
+
+/* Viewer-local sky orientation: labels stay readable in compact and full UI. */
+.skyOrientation {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+.skyOrientationLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.skyOrientationRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px auto;
+  align-items: center;
+  gap: 8px;
+}
+.skyOrientationRow input {
+  min-width: 0;
+  width: 100%;
+}
+.skyOrientationRow input[type='number'] {
+  font-variant-numeric: tabular-nums;
+}
+.skyOrientationRow input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.skyOrientationEnds {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-sm);
+}
+.skyOrientation .hint {
+  margin: 0;
+}
+@media (pointer: coarse) {
+  .skyOrientationRow input {
+    min-height: 44px;
+  }
 }
 
 /* Music modal — fixed top-right, just left of the rail; collapses to its "Music" button */
@@ -7222,6 +7265,60 @@ canvas.fog-painting {
 :is(#roomSettingsModal, #settingsModal) .tableBody .sizeRow > .muted {
   flex: 0 0 auto;
   opacity: 0.6;
+}
+
+/* Shared room selection keeps its label and hint visible in compact mode. */
+.roomEnvironmentControls {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.roomEnvironmentControls select {
+  width: 100%;
+}
+.roomEnvironmentControls p {
+  margin: var(--gap) 0 0;
+  font-size: var(--fs-sm);
+}
+/* Matching a theme is explicit; its text button stays readable in compact mode. */
+.tableThemeMatch {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+.tableThemeLabel {
+  font-size: var(--fs-sm);
+  padding-top: var(--gap);
+}
+.tableThemeControls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  min-width: 0;
+}
+.tableThemeControls p {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+@media (max-width: 600px), (pointer: coarse) {
+  #roomSettingsModal .tableBody .roomEnvironmentRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #roomSettingsModal .tableBody .roomEnvironmentRow > label {
+    flex: none;
+  }
+  .roomEnvironmentControls select {
+    min-height: max(44px, var(--control-min-height));
+  }
+  .tableThemeMatch {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .tableThemeControls button {
+    min-height: max(44px, var(--control-min-height));
+  }
 }
 
 /* Custom collider authoring runs in the dialog top layer above the asset form. */

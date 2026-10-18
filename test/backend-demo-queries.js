@@ -23,6 +23,8 @@ test('demo query boundary rejects malformed names, credentials, IDs and starters
     await assert.rejects(demo.resume(badHash), { code: 'invalid' });
     await assert.rejects(demo.rotateInvite({ ...valid, inviteHash: badHash }), { code: 'invalid' });
   }
+  for (const environment of [null, {}, [], '', 'standard', '__proto__', 'space-ship', 'Cozy'])
+    await assert.rejects(demo.createTable({ ...valid, environment }), { code: 'invalid' });
   await assert.rejects(demo.createTable({ ...valid, starter: '__proto__' }), { code: 'invalid' });
   await assert.rejects(demo.createTable({ ...valid, inviteHash: valid.sessionHash }), {
     code: 'invalid',

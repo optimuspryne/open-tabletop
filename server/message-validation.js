@@ -825,13 +825,13 @@ export function spawnPayload(
         out[key] = props[key];
       }
     if (props.finish !== undefined) {
-      // shape only; the renderer maps unknown keys to matte and colorProps is the enum gate
+      // shape only; the renderer maps unknown keys to matte and applyAppearancePatch is the enum gate
       const finish = boundedString(props.finish, { min: 1, max: 16, pattern: /^[a-z]+$/ });
       if (finish === null) return null;
       out.finish = finish;
     }
     if (props.finishImg !== undefined) {
-      const img = localDiceImg(props.finishImg); // custom-finish texture; colorProps pairs it with finish
+      const img = localDiceImg(props.finishImg); // custom-finish texture; applyAppearancePatch pairs it with finish
       if (img === null) return null;
       out.finishImg = img;
     }
@@ -1181,7 +1181,7 @@ export function groupRecolor(message, { max = 80 } = {}) {
     out.textColor = textColor;
   }
   if (message.finish !== undefined) {
-    // A material finish key. colorProps() is the real gate (rejects unknown keys and object types);
+    // A material finish key. applyAppearancePatch() is the real gate (rejects unknown keys and object types);
     // here we only bound the shape to a short lowercase token.
     const finish = boundedString(message.finish, { min: 1, max: 16, pattern: /^[a-z]+$/ });
     if (finish === null) return null;

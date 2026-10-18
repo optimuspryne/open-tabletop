@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   dieSpawnProps,
   clampColor,
-  colorProps,
+  applyAppearancePatch,
   recolorPalette,
   METALS,
   DIE_SIDES,
@@ -97,52 +97,64 @@ test('a dice set round-trips through the spawn sanitizer with its auto ink', () 
   }
 });
 
-// colorProps — the shared recolor validator used by single recolor AND the multi-select batch.
-test('colorProps: a die takes body + number color', () => {
-  assert.deepEqual(colorProps('die', { sides: 20 }, { color: 0x1f7a4d, textColor: 0xf4f1ea }), {
-    sides: 20,
-    color: 0x1f7a4d,
-    textColor: 0xf4f1ea,
-  });
-});
-
-test('colorProps: a prop takes body color; textColor is ignored for it', () => {
-  assert.deepEqual(colorProps('prop', { shape: 'box' }, { color: 0xd14b4b, textColor: 0x111111 }), {
-    shape: 'box',
-    color: 0xd14b4b,
-  });
-});
-
-test('colorProps: cards and boards are not recolorable → null', () => {
-  assert.equal(colorProps('card', {}, { color: 0xffffff }), null);
-  assert.equal(colorProps('board', {}, { color: 0xffffff }), null);
-  assert.equal(colorProps('deck', {}, { color: 0xffffff }), null);
-});
-
-test('colorProps: an out-of-range color is rejected → null (no partial write)', () => {
-  assert.equal(colorProps('die', { sides: 6 }, { color: 0x1000000 }), null);
-  assert.equal(colorProps('prop', {}, { color: -1 }), null);
-});
-
-test('colorProps: a poker/coin dispenser takes a tint; a team bowl needs a team flag', () => {
+// applyAppearancePatch — the shared recolor validator used by single recolor AND the multi-select batch.
+test('applyAppearancePatch: a die takes body + number color', () => {
   assert.deepEqual(
-    colorProps('dispenser', { disp: 'poker' }, { color: 0xd9c24b }, { item: 'chip' }),
+    applyAppearancePatch('die', { sides: 20 }, { color: 0x1f7a4d, textColor: 0xf4f1ea }),
+    {
+      sides: 20,
+      color: 0x1f7a4d,
+      textColor: 0xf4f1ea,
+    },
+  );
+});
+
+test('applyAppearancePatch: a prop takes body color; textColor is ignored for it', () => {
+  assert.deepEqual(
+    applyAppearancePatch('prop', { shape: 'box' }, { color: 0xd14b4b, textColor: 0x111111 }),
+    {
+      shape: 'box',
+      color: 0xd14b4b,
+    },
+  );
+});
+
+test('applyAppearancePatch: ordinary cards, decks and boards reject body-color changes', () => {
+  assert.equal(applyAppearancePatch('card', {}, { color: 0xffffff }), null);
+  assert.equal(applyAppearancePatch('board', {}, { color: 0xffffff }), null);
+  assert.equal(applyAppearancePatch('deck', {}, { color: 0xffffff }), null);
+});
+
+test('applyAppearancePatch: an out-of-range color is rejected → null (no partial write)', () => {
+  assert.equal(applyAppearancePatch('die', { sides: 6 }, { color: 0x1000000 }), null);
+  assert.equal(applyAppearancePatch('prop', {}, { color: -1 }), null);
+});
+
+test('applyAppearancePatch: a poker/coin dispenser takes a tint; a team bowl needs a team flag', () => {
+  assert.deepEqual(
+    applyAppearancePatch('dispenser', { disp: 'poker' }, { color: 0xd9c24b }, { item: 'chip' }),
     { disp: 'poker', color: 0xd9c24b },
   );
-  assert.equal(colorProps('dispenser', { disp: 'poker' }, { color: 0xd9c24b }, null), null); // unknown dispenser
   assert.equal(
-    colorProps('dispenser', { disp: 'gobowl' }, { color: 0xd9c24b }, { team: true }),
+    applyAppearancePatch('dispenser', { disp: 'poker' }, { color: 0xd9c24b }, null),
+    null,
+  ); // unknown dispenser
+  assert.equal(
+    applyAppearancePatch('dispenser', { disp: 'gobowl' }, { color: 0xd9c24b }, { team: true }),
     null,
   ); // team bowl ignores color
-  assert.deepEqual(colorProps('dispenser', { disp: 'gobowl' }, { team: 1 }, { team: true }), {
-    disp: 'gobowl',
-    team: 1,
-  });
+  assert.deepEqual(
+    applyAppearancePatch('dispenser', { disp: 'gobowl' }, { team: 1 }, { team: true }),
+    {
+      disp: 'gobowl',
+      team: 1,
+    },
+  );
 });
 
-test('colorProps: does not mutate the input props', () => {
+test('applyAppearancePatch: does not mutate the input props', () => {
   const props = { sides: 8 };
-  const out = colorProps('die', props, { color: 0x123456 });
+  const out = applyAppearancePatch('die', props, { color: 0x123456 });
   assert.equal('color' in props, false); // original untouched
   assert.equal(out.color, 0x123456);
 });
@@ -150,26 +162,32 @@ test('colorProps: does not mutate the input props', () => {
 test('every palette color (except Neutral) survives the recolor validator', () => {
   for (const p of PALETTE) {
     if (p.hex == null) continue;
-    assert.equal(colorProps('prop', {}, { color: p.hex }).color, p.hex);
+    assert.equal(applyAppearancePatch('prop', {}, { color: p.hex }).color, p.hex);
   }
 });
 
-// colorProps — team pieces switch SET, not a freeform color (props.color is ignored on render).
-test('colorProps: a team prop takes a team index, not a freeform color', () => {
-  assert.equal(colorProps('prop', { shape: 'checker' }, { color: 0xff0000 }), null); // color alone → rejected
-  assert.deepEqual(colorProps('prop', { shape: 'checker' }, { team: 1 }), {
+// applyAppearancePatch — team pieces switch SET, not a freeform color (props.color is ignored on render).
+test('applyAppearancePatch: a team prop takes a team index, not a freeform color', () => {
+  assert.equal(applyAppearancePatch('prop', { shape: 'checker' }, { color: 0xff0000 }), null); // color alone → rejected
+  assert.deepEqual(applyAppearancePatch('prop', { shape: 'checker' }, { team: 1 }), {
     shape: 'checker',
     team: 1,
   });
-  assert.deepEqual(colorProps('prop', { shape: 'chess-queen' }, { team: 0 }), {
+  assert.deepEqual(applyAppearancePatch('prop', { shape: 'chess-queen' }, { team: 0 }), {
     shape: 'chess-queen',
     team: 0,
   });
 });
 
-test('colorProps: a non-team prop (coin/general) still takes a color', () => {
-  assert.equal(colorProps('prop', { shape: 'coin' }, { color: 0xd4af37 }).color, 0xd4af37);
-  assert.equal(colorProps('prop', { shape: 'token' }, { color: 0x5fae5f }).color, 0x5fae5f);
+test('applyAppearancePatch: a non-team prop (coin/general) still takes a color', () => {
+  assert.equal(
+    applyAppearancePatch('prop', { shape: 'coin' }, { color: 0xd4af37 }).color,
+    0xd4af37,
+  );
+  assert.equal(
+    applyAppearancePatch('prop', { shape: 'token' }, { color: 0x5fae5f }).color,
+    0x5fae5f,
+  );
 });
 
 test('built-in object finish flags and instance overrides resolve through the shared material list', () => {
@@ -184,41 +202,67 @@ test('built-in object finish flags and instance overrides resolve through the sh
   assert.equal(objectFinish(null), 'matte'); // inspector uses null for non-object definitions
 });
 
-test('colorProps: built-in, uploaded, and dispenser models accept material-only changes', () => {
-  assert.deepEqual(colorProps('prop', { shape: 'chess-king', team: 0 }, { finish: 'satin' }), {
-    shape: 'chess-king',
-    team: 0,
-    finish: 'satin',
-  });
-  assert.deepEqual(colorProps('prop', { shape: 'token' }, { finish: 'matte' }), {
+test('applyAppearancePatch: built-in, uploaded, and dispenser models accept material-only changes', () => {
+  assert.deepEqual(
+    applyAppearancePatch('prop', { shape: 'chess-king', team: 0 }, { finish: 'satin' }),
+    {
+      shape: 'chess-king',
+      team: 0,
+      finish: 'satin',
+    },
+  );
+  assert.deepEqual(applyAppearancePatch('prop', { shape: 'token' }, { finish: 'matte' }), {
     shape: 'token',
     finish: 'matte',
   });
-  assert.equal(colorProps('prop', { shape: 'token' }, { finish: 'custom' }), null);
+  assert.equal(applyAppearancePatch('prop', { shape: 'token' }, { finish: 'custom' }), null);
   assert.equal(
-    colorProps('prop', { shape: 'token' }, { finish: 'glossy', finishImg: '/assets/dice/a.jpg' }),
+    applyAppearancePatch(
+      'prop',
+      { shape: 'token' },
+      { finish: 'glossy', finishImg: '/assets/dice/a.jpg' },
+    ),
     null,
   );
   assert.equal(
-    colorProps('prop', { shape: 'chess-king' }, { finish: 'satin', color: 0xffffff }),
+    applyAppearancePatch('prop', { shape: 'chess-king' }, { finish: 'satin', color: 0xffffff }),
     null,
   );
-  assert.deepEqual(colorProps('prop', { model: '/assets/props/a.glb' }, { finish: 'glossy' }), {
-    model: '/assets/props/a.glb',
-    finish: 'glossy',
-  });
-  assert.equal(colorProps('prop', { model: '/assets/props/a.glb' }, { finish: 'custom' }), null);
   assert.deepEqual(
-    colorProps('dispenser', { disp: 'pokerStack' }, { finish: 'glossy' }, DISPENSERS.pokerStack),
+    applyAppearancePatch('prop', { model: '/assets/props/a.glb' }, { finish: 'glossy' }),
+    {
+      model: '/assets/props/a.glb',
+      finish: 'glossy',
+    },
+  );
+  assert.equal(
+    applyAppearancePatch('prop', { model: '/assets/props/a.glb' }, { finish: 'custom' }),
+    null,
+  );
+  assert.deepEqual(
+    applyAppearancePatch(
+      'dispenser',
+      { disp: 'pokerStack' },
+      { finish: 'glossy' },
+      DISPENSERS.pokerStack,
+    ),
     { disp: 'pokerStack', finish: 'glossy' },
   );
 });
 
-test('colorProps: a limited-palette object rejects an off-palette color (group-recolor safety)', () => {
-  assert.equal(colorProps('prop', { shape: 'coin' }, { color: 0xd14b4b }), null); // red isn't a metal
-  assert.equal(colorProps('prop', { shape: 'coin' }, { color: 0xc0c0c0 }).color, 0xc0c0c0); // silver is
+test('applyAppearancePatch: a limited-palette object rejects an off-palette color (group-recolor safety)', () => {
+  assert.equal(applyAppearancePatch('prop', { shape: 'coin' }, { color: 0xd14b4b }), null); // red isn't a metal
   assert.equal(
-    colorProps('dispenser', { disp: 'coinStack' }, { color: 0x5fae5f }, { swatches: 'metals' }),
+    applyAppearancePatch('prop', { shape: 'coin' }, { color: 0xc0c0c0 }).color,
+    0xc0c0c0,
+  ); // silver is
+  assert.equal(
+    applyAppearancePatch(
+      'dispenser',
+      { disp: 'coinStack' },
+      { color: 0x5fae5f },
+      { swatches: 'metals' },
+    ),
     null,
   ); // green isn't a metal
 });
@@ -283,14 +327,18 @@ test('dieSpawnProps: a custom finish keeps its texture; a bad or missing one dro
   ); // a non-custom finish never carries a texture
 });
 
-test('colorProps: custom finish requires a texture and clears it when leaving', () => {
+test('applyAppearancePatch: custom finish requires a texture and clears it when leaving', () => {
   assert.deepEqual(
-    colorProps('die', { sides: 6 }, { finish: 'custom', finishImg: '/assets/dice/a.jpg' }),
+    applyAppearancePatch(
+      'die',
+      { sides: 6 },
+      { finish: 'custom', finishImg: '/assets/dice/a.jpg' },
+    ),
     { sides: 6, finish: 'custom', finishImg: '/assets/dice/a.jpg' },
   );
-  assert.equal(colorProps('die', { sides: 6 }, { finish: 'custom' }), null); // no texture → rejected
+  assert.equal(applyAppearancePatch('die', { sides: 6 }, { finish: 'custom' }), null); // no texture → rejected
   assert.deepEqual(
-    colorProps(
+    applyAppearancePatch(
       'die',
       { sides: 6, finish: 'custom', finishImg: '/assets/dice/a.jpg' },
       { finish: 'glossy' },
@@ -298,7 +346,7 @@ test('colorProps: custom finish requires a texture and clears it when leaving', 
     { sides: 6, finish: 'glossy' },
   ); // leaving custom drops the texture
   assert.deepEqual(
-    colorProps(
+    applyAppearancePatch(
       'die',
       { sides: 6, finish: 'custom', finishImg: '/assets/dice/a.jpg' },
       { finish: 'matte' },
@@ -329,14 +377,17 @@ test('dieSpawnProps: a valid pipped model is forced to d6 and keeps standard fin
   ); // custom surface images are for procedural dice only
 });
 
-test('colorProps: pipped models accept standard finishes but reject custom textures', () => {
-  assert.deepEqual(colorProps('die', { sides: 6, model: 'pip-round' }, { finish: 'pearl' }), {
-    sides: 6,
-    model: 'pip-round',
-    finish: 'pearl',
-  });
+test('applyAppearancePatch: pipped models accept standard finishes but reject custom textures', () => {
+  assert.deepEqual(
+    applyAppearancePatch('die', { sides: 6, model: 'pip-round' }, { finish: 'pearl' }),
+    {
+      sides: 6,
+      model: 'pip-round',
+      finish: 'pearl',
+    },
+  );
   assert.equal(
-    colorProps(
+    applyAppearancePatch(
       'die',
       { sides: 6, model: 'pip-round' },
       { finish: 'custom', finishImg: '/assets/dice/a.jpg' },

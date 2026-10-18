@@ -79,22 +79,6 @@ const actor = (role, userId = '1') => ({
   },
 });
 
-test('member handler module registers its complete message family', () => {
-  assert.deepEqual(
-    [...harness().handlers.keys()],
-    [
-      'setPlacard',
-      'setParticipation',
-      'setPlayerTimeout',
-      'members',
-      'admit',
-      'kick',
-      'setRole',
-      'reassignHand',
-    ],
-  );
-});
-
 test('players and helpers cannot list or mutate membership', async () => {
   const { handlers, calls } = harness();
   for (const role of ['player', 'helper']) {

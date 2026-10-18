@@ -49,3 +49,41 @@ changelog record the integration. No push or publication was performed.
 Gallery images load eagerly so they are available at every responsive layout without
 waiting for scrolling. This changes loading behavior only, not the approved placement.
 Refresh the preview at `http://127.0.0.1:4173/`; no app server restart is required.
+
+
+## Additional approved renderer mockups (October 14, 2026)
+
+`go.png`, `dominoes.png`, `mahjong.png` and `wordy.png` are unchanged original 1086 x 912
+PNG captures. They use the production `public/rendering/core.js` renderer and the current
+bundled GLBs/materials in isolated, explicitly arranged scenes. They show actual app artwork
+and toolbar styling, but are mockups rather than screenshots of saved multiplayer games.
+They use no AI image generation, image retouching, custom uploads or external screenshot art.
+The user explicitly approved all four before site integration.
+
+| File | Staged contents | Placement |
+| --- | --- | --- |
+| `go.png` | Authored board, wooden bowls and black/white stones on blue felt | Hero slide 4 |
+| `dominoes.png` | Double-six chain, seven-tile hand, ten-tile boneyard and authored box | Hero slide 5 |
+| `mahjong.png` | Shared 136-tile wall arrangement, 22 tiles moved into hand/exposed rows, dice on green felt | Hero slide 6 |
+| `wordy.png` | Authored board, wooden letter tiles and drawstring pouch on blue felt | Hero slide 7 |
+
+All visible models, tile art, textures and icons retain their existing licenses in
+[asset credits](../../../docs/ASSET_CREDITS.md). The original September captures above are
+unchanged, including the chess attribution. The hero now repeats Chess, Card games, Dice,
+Go, Dominoes, Mahjong and Wordy; the existing cards/dice gallery and wiki library image stay
+in place. Nothing in these captures implies automatic game rules or scoring.
+
+Reproduction notes: the local capture harness temporarily served the app shell with a staged
+client entry point, imported the production renderer, used the existing shared object kinds,
+Go geometry and Mahjong wall layout, awaited model readiness, and captured with the existing
+headless Chromium harness using SwiftShader. Camera framing and piece positions were arranged
+for these promotional mockups. No capture harness is shipped or required by the website.
+The website consumes only the approved static PNGs.
+
+Integration verification: all seven hero images decoded in the production homepage, 25
+page/profile checks passed, and native keyboard/touch navigation, autoplay, pause, wraparound,
+rapid navigation, failed-image recovery, reduced motion and the no-script fallback passed.
+The four new PNGs match the approved originals byte for byte. Desktop and phone chess/Go
+layouts were visually reviewed. Full check, component, input and device suites passed;
+game component fixtures separately reported 10 missing texture derivatives, with no missing
+website assets. Physical-device acceptance and public deployment remain separate steps.

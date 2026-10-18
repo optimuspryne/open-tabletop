@@ -10,7 +10,7 @@ import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
 import { boardGeometry } from '/shared/board-geometry.js';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createModelLoader } from './model-loader.js';
 import {
   CONFIG,
   renderer,
@@ -24,6 +24,7 @@ import { isHandTile } from '../../shared/hand-fan.js';
 import { assetTextureURL, assetThumbnailURL } from './asset-texture-url.js';
 import { THUMBNAIL_MAX_DIMENSION } from '../../shared/image-thumbnails.js';
 import { playingCardFace } from '../../shared/playing-cards.js';
+import { mahjongFaceLabel } from '../../shared/tile-models.js';
 import {
   PROPS,
   COLORS,
@@ -32,7 +33,7 @@ import {
   HEX_HH,
   cardGeom,
   dieVerts,
-  dieR,
+  dieGeometrySize,
   DIE_GLYPH,
   BOARDS,
   BOARD_SIZE,
@@ -1015,7 +1016,9 @@ function resolveTexture(ref) {
 
   const parsed = parseCardFront(ref);
   let texture;
-  if (parsed.ref) texture = loadImageTexture(cardTextureURL(parsed.ref));
+  const mahjongLabel = mahjongFaceLabel(parsed.ref);
+  if (mahjongLabel) texture = textFaceTexture(mahjongLabel, COLORS.ink, COLORS.ivory, COLORS.ivory);
+  else if (parsed.ref) texture = loadImageTexture(cardTextureURL(parsed.ref));
   else if (parsed.kind === 'back') texture = cardBack();
   else if (parsed.kind === 'rank') texture = cardFront(parsed.rank, parsed.suit, parsed.color);
   else if (parsed.kind === 'joker') texture = jokerFace(parsed.color);
@@ -1428,7 +1431,11 @@ function pippedDiePainter(color, textColor, finish = 'matte') {
   };
 }
 function pippedDieMesh(url, color, textColor, finish) {
-  return loadModelGroup(url, { target: dieR(6) * 2 }, pippedDiePainter(color, textColor, finish));
+  return loadModelGroup(
+    url,
+    { target: dieGeometrySize(6) * 2 },
+    pippedDiePainter(color, textColor, finish),
+  );
 }
 
 // uses the special vertex-numbered build; everything else is a convex polyhedron.
@@ -1446,7 +1453,7 @@ function dieMesh(props = {}) {
   if (sides === 6) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
     return new THREE.Mesh(
-      new THREE.BoxGeometry(dieR(6) * 2, dieR(6) * 2, dieR(6) * 2),
+      new THREE.BoxGeometry(dieGeometrySize(6) * 2, dieGeometrySize(6) * 2, dieGeometrySize(6) * 2),
       faceOrder.map((n) => dieFaceMaterial(n, props.color, props.textColor, finish, finishImg)),
     );
   }
@@ -1628,7 +1635,7 @@ function propColor(props) {
   return props.color ?? COLORS.neutralProp;
 }
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = createModelLoader();
 function disposeCardMesh(root) {
   if (!root || root.userData.ottDisposed) return;
   root.userData.ottDisposed = true;
@@ -2732,7 +2739,8 @@ function rememberPreview(key, url) {
 // to callers needing more resolution; this never changes the texture used by a tabletop mesh.
 export function cardPreviewURL(ref, { thumbnail = true } = {}) {
   const r = ref || 'back';
-  if (r.startsWith('/')) return thumbnail ? assetThumbnailURL(r) : assetTextureURL(r);
+  if (r.startsWith('/') && !mahjongFaceLabel(r))
+    return thumbnail ? assetThumbnailURL(r) : assetTextureURL(r);
   if (r.startsWith('http') || r.startsWith('data:')) return thumbnail ? assetThumbnailURL(r) : r;
   const key = thumbnail ? 'thumb:' + r : r;
   if (_prevCache.has(key)) return _prevCache.get(key);

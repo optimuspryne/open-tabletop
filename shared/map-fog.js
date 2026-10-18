@@ -14,6 +14,8 @@ export const MAP_FOG = Object.freeze({
   lift: 0.003,
   gmOpacity: 0.5,
 });
+// One bit per cell in row order z * resolution + x, least-significant bit first within each
+// byte: 1 is covered, 0 is revealed. An unexplored mask therefore starts with every byte at 255.
 const bytes = MAP_FOG.resolution ** 2 / 8;
 const encodedLength = Math.ceil(bytes / 3) * 4;
 

@@ -28,7 +28,7 @@ existing JSON; there are no migrations, environment changes or additional depend
 
 | File | Change |
 | --- | --- |
-| `shared/pieces.js` | Adds `DOMINO_APPEARANCE`, model path, `normalizeDominoAppearance`, `dominoAppearanceOf`, `dominoModel`, `cardPublicProps`; extends `colorProps` with validated, independent appearance patches. |
+| `shared/pieces.js` | Adds `DOMINO_APPEARANCE`, model path, `normalizeDominoAppearance`, `dominoAppearanceOf`, `dominoModel`, `cardPublicProps`; extends `applyAppearancePatch` with validated, independent appearance patches. |
 | `public/rendering/tiles.js` | Adds `createTileRenderer`: bounded template cache, model selection, per-instance painting, fitting, fallback and late-load disposal guard. |
 | `public/rendering/graphics.js` | Extends `fitModel` for axis dimensions, dispatches `cardMesh` to models or `proceduralCardMesh`, adds `disposeCardMesh` and `tilePreviewURL`, registers card disposal and preserves browse-owned texture cleanup. |
 | `public/ui/tile-appearance.js` | Adds `createTileAppearanceControls` for independent color patches, whole-model finish, mixed labels and phone finish support. |

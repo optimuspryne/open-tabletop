@@ -100,7 +100,7 @@ test('every production registration has an explicit capability and uses the gate
   const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
   const table = source.slice(source.indexOf('class TableRoom'), source.indexOf('class EditorRoom'));
   assert.match(table, /const tableMessage = .*guardedMessage\(this, type, handler\)/);
-  assert.doesNotMatch(table, /\b(?:safeMessage|onMessage)\(/);
+  assert.doesNotMatch(table, /\b(?:safeMessage|onMessage|assetMessage)\(/);
   const inlineNames = [...table.matchAll(/tableMessage\('([^']+)'/g)].map((match) => match[1]);
   const names = [...handlers.keys(), ...inlineNames];
   assert.equal(new Set(names).size, names.length);

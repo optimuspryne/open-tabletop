@@ -67,6 +67,7 @@
   cursor: pointer;
 }
 .demo-entry__choices label:has(:checked) { background: var(--accent-soft); border-color: var(--accent); }
+.demo-entry__hint { display: block; margin-top: 8px; color: var(--muted); }
 .demo-entry input[type='radio'] { accent-color: var(--accent); flex-shrink: 0; width: 18px; height: 18px; margin: 0; }
 .demo-entry .button { min-height: 48px; font-size: 16px; display: inline-flex; align-items: center; gap: 10px; }
 body .demo-entry :is(button, .button):has(.ico) .lbl { display: inline; }

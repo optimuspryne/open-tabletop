@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import * as THREE from '../public/vendor/three/three.module.js';
 import { createSkybox } from '../public/table/skybox.js';
 
-function fixture({ device = 'desktop', preference, blocked = false, failCanvas = false } = {}) {
+function fixture({
+  device = 'desktop',
+  preference,
+  blocked = false,
+  failCanvas = false,
+  saved = {},
+} = {}) {
   const scene = new THREE.Scene();
   const fallback = (scene.background = new THREE.Color('#123456'));
   const loads = [],
@@ -16,27 +22,36 @@ function fixture({ device = 'desktop', preference, blocked = false, failCanvas =
   class CubeTextureLoader extends TextureLoader {}
   const chips = ['off', 'low', 'medium', 'high', 'ultra'].map((skyres) => ({
     dataset: { skyres },
+    setAttribute() {},
     classList: {
       toggle(key, on) {
         this.on = on;
       },
     },
   }));
+  const controls = Object.fromEntries(
+    ['skyTilt', 'skyTiltDegrees', 'skyRotation', 'skyRotationDegrees', 'skyOrientationStatus'].map(
+      (id) => [id, { value: '', disabled: false, setAttribute() {} }],
+    ),
+  );
+  const stored = new Map(Object.entries(saved));
   const sky = createSkybox({
     THREE: { ...THREE, TextureLoader, CubeTextureLoader },
     scene,
     renderer: { capabilities: { getMaxAnisotropy: () => 8 } },
     deviceClass: () => device,
     storage: {
-      getItem: () => {
+      getItem: (key) => {
         if (blocked) throw Error('blocked');
-        return preference;
+        return key === 'tabletop.skyRes' ? preference : (stored.get(key) ?? null);
       },
       setItem: (k, v) => {
-        preference = v;
+        if (blocked) throw Error('blocked');
+        if (k === 'tabletop.skyRes') preference = v;
+        else stored.set(k, v);
       },
     },
-    byId: () => ({ querySelectorAll: () => chips }),
+    byId: (id) => (id === 'skyResRow' ? { querySelectorAll: () => chips } : controls[id]),
     doc: {
       createElement: () => ({
         getContext: () => (failCanvas ? null : { drawImage: (...args) => draws.push(args) }),
@@ -51,6 +66,12 @@ function fixture({ device = 'desktop', preference, blocked = false, failCanvas =
     loads,
     draws,
     chips,
+    controls,
+    stored,
+    angle: (id, value, event = 'input') => {
+      controls[id].value = value;
+      controls[id]['on' + event]();
+    },
     setResolution: (value) => chips.find((chip) => chip.dataset.skyres === value).onclick(),
   };
 }
@@ -194,4 +215,88 @@ test('legacy sky resizing keeps usable original textures if canvas allocation is
   f.loads[1].loaded(cube);
   assert.equal(f.scene.background, cube);
   assert.ok(cube.image.every((face) => face.width === 2048));
+});
+
+test('angles apply live without reloading; native zero orientation and owned resources restore', () => {
+  const f = fixture({ preference: 'ultra' });
+  f.sky.sync('/sky');
+  const source = texture();
+  f.loads[0].loaded(source);
+  f.angle('skyTilt', '-25');
+  f.angle('skyRotationDegrees', '45');
+  assert.equal(f.loads.length, 1);
+  assert.equal(f.scene.background, f.fallback);
+  const mesh = f.scene.children[0];
+  assert.equal(f.controls.skyTiltDegrees.value, '-25');
+  assert.equal(f.controls.skyRotation.value, '45');
+  assert.equal(f.stored.get('tabletop.skyTilt'), '-25');
+  assert.equal(mesh.material.uniforms.tEquirect.value, source);
+  const inverse = new THREE.Matrix4()
+    .makeRotationFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(-25), Math.PI / 4, 0, 'YXZ'))
+    .invert();
+  assert.deepEqual(
+    mesh.material.uniforms.skyRotation.value.elements,
+    new THREE.Matrix3().setFromMatrix4(inverse).elements,
+  );
+  const camera = new THREE.PerspectiveCamera();
+  camera.position.set(4, 8, -2);
+  camera.updateMatrixWorld();
+  mesh.onBeforeRender(null, null, camera);
+  assert.deepEqual(new THREE.Vector3().setFromMatrixPosition(mesh.matrixWorld), camera.position);
+  const hits = [];
+  mesh.raycast(null, hits);
+  assert.deepEqual(hits, []);
+  f.angle('skyTiltDegrees', '0');
+  f.angle('skyRotation', '0');
+  assert.equal(f.scene.background, source);
+  assert.equal(mesh.visible, false);
+  let geometryDisposed = false,
+    materialDisposed = false;
+  mesh.geometry.addEventListener('dispose', () => (geometryDisposed = true));
+  mesh.material.addEventListener('dispose', () => (materialDisposed = true));
+  f.sky.sync('');
+  assert.equal(f.scene.children.length, 0);
+  assert.ok(geometryDisposed && materialDisposed);
+  assert.equal(source.userData.disposed, 1);
+});
+
+test('saved angles normalize; numeric edits and blocked storage retain usable session settings', () => {
+  const f = fixture({ saved: { 'tabletop.skyTilt': 'Infinity', 'tabletop.skyRotation': '300' } });
+  assert.equal(f.controls.skyTilt.value, '0');
+  assert.equal(f.controls.skyRotation.value, '180');
+  f.angle('skyTiltDegrees', '-200');
+  assert.equal(f.controls.skyTilt.value, '-90');
+  f.angle('skyTiltDegrees', '', 'change');
+  assert.equal(f.controls.skyTiltDegrees.value, '-90');
+  f.angle('skyRotationDegrees', 'NaN', 'change');
+  assert.equal(f.controls.skyRotationDegrees.value, '180');
+  const blocked = fixture({ blocked: true });
+  blocked.angle('skyTilt', '15');
+  assert.equal(blocked.controls.skyTiltDegrees.value, '15');
+  blocked.setResolution('off');
+  assert.equal(blocked.controls.skyTilt.disabled, true);
+  blocked.angle('skyTilt', '40');
+  blocked.setResolution('high');
+  assert.equal(blocked.controls.skyTilt.value, '15');
+  assert.equal(blocked.controls.skyTilt.disabled, false);
+});
+
+test('latest angles apply to pending loads, cubemaps, replacements and Off/on', () => {
+  const f = fixture({ preference: 'ultra', saved: { 'tabletop.skyTilt': '10' } });
+  f.sky.sync('/sky');
+  f.angle('skyRotation', '80');
+  f.loads[0].loaded(texture());
+  assert.equal(f.scene.children.length, 1);
+  f.sky.sync(JSON.stringify({ t: 'cube', f: Array(6).fill('/face') }));
+  const cube = new THREE.CubeTexture(Array(6).fill({ width: 512, height: 512 }));
+  f.loads[1].loaded(cube);
+  assert.equal(f.scene.children.length, 1);
+  assert.equal(f.scene.children[0].material.uniforms.tCube.value, cube);
+  assert.equal(f.scene.children[0].material.uniforms.tFlip.value, -1);
+  f.setResolution('off');
+  assert.equal(f.scene.children.length, 0);
+  f.setResolution('ultra');
+  f.loads[2].loaded(new THREE.CubeTexture(Array(6).fill({ width: 512, height: 512 })));
+  assert.equal(f.scene.children.length, 1);
+  assert.equal(f.controls.skyRotationDegrees.value, '80');
 });

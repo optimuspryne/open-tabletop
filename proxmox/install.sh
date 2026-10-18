@@ -48,7 +48,7 @@ install_apt_packages() {
   chmod 0644 /etc/apt/keyrings/nodesource.gpg
   cat > /etc/apt/sources.list.d/nodesource.sources <<'EOF'
 Types: deb
-URIs: https://deb.nodesource.com/node_26.x
+URIs: https://deb.nodesource.com/node_24.x
 Suites: nodistro
 Components: main
 Signed-By: /etc/apt/keyrings/nodesource.gpg
@@ -72,7 +72,11 @@ EOF
   fi
   apt_update
   apt-get install -y nodejs "$postgres_package"
-  [[ $(node -p "process.versions.node.split('.')[0]") == 26 ]] || { printf 'Node.js 26 installation failed\n' >&2; exit 1; }
+}
+
+validate_node_runtime() {
+  /usr/bin/node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 24 ? 0 : 1)' \
+    || fail 'Node.js 24 or newer is required; upgrade the host runtime before retrying'
 }
 
 install_packages() {
@@ -86,8 +90,7 @@ install_packages() {
       pacman -Syu --needed --noconfirm ca-certificates curl openssl tar nodejs npm postgresql valkey util-linux shadow
       ;;
   esac
-  /usr/bin/node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 22 || (major === 22 && minor >= 12) ? 0 : 1)' \
-    || fail 'Node.js 22.12 or newer is required; upgrade the host runtime'
+  validate_node_runtime
 }
 
 initialize_postgres() {
@@ -531,6 +534,7 @@ EOF
   else
     [[ -f "$config_dir/open-tabletop.env" && -L "$app_root/current" ]] \
       || { printf 'Open Tabletop is not installed\n' >&2; exit 1; }
+    validate_node_runtime
     backup_database
   fi
 

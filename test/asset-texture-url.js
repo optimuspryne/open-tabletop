@@ -18,8 +18,8 @@ test('all saved image categories and bundled rasters use WebP thumbnail derivati
     '/asset-textures/v1/bundled/sky%2Fequirect%2Fcloudy_noon.png.webp?quality=thumbnail',
   );
   assert.equal(
-    assetThumbnailURL('/mahjong/faces/dragR.png'),
-    '/asset-textures/v1/bundled/mahjong%2Ffaces%2FdragR.png.webp?quality=thumbnail',
+    assetThumbnailURL('/mahjong/faces/flowLotus.png'),
+    '/asset-textures/v1/bundled/mahjong%2Ffaces%2FflowLotus.png.webp?quality=thumbnail',
   );
   assert.equal(
     assetThumbnailURL('/cards/bridge/Back-R.png'),
@@ -36,6 +36,8 @@ test('unsupported thumbnail refs never fall back to raw source images', () => {
     'data:image/svg+xml;base64,AAAA',
     '/sky/../secret.png',
     '/models/secret.png',
+    '/mahjong/faces/dragR.png',
+    '/asset-textures/v1/bundled/mahjong%2Ffaces%2FdragR.png.webp?quality=thumbnail',
     '/asset-textures/v1/sky/not-an-asset.png.webp?quality=thumbnail',
     '/asset-textures/v1/bundled/sky%2F..%2Fsecret.png.webp?quality=thumbnail',
     '/asset-textures/v1/bundled/%ZZ.webp?quality=thumbnail',

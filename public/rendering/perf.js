@@ -1,12 +1,9 @@
-// perf.js — a dev-only render-cost overlay for the client half of "plays well at
-// real scale" (docs/ROADMAP.md §1). Off by default. Turn it on with ?perf=1 on the
+// Dev-only render-cost overlay. Off by default. Turn it on with ?perf=1 on the
 // table URL (matching the ?workshop=1 convention in client.js) or window.ottPerf(true)
 // from the console — the URL form is the one that works on a phone/tablet with no keyboard.
 //
 // FPS and frame time say WHETHER the frame is smooth; renderer.info says WHY — draw calls
-// and triangles scale with the piece count, geometries/textures with the asset set. Those
-// are exactly the numbers the graphics-quality tiers (backlog §12) would turn down, so this
-// overlay is also the signal a future auto-quality-tier default would read.
+// and triangles scale with the piece count, geometries/textures with the asset set.
 //
 // Deliberately NOT part of any automated suite: real numbers need a real GPU on the target
 // device, not the headless SwiftShader the test harnesses run under.

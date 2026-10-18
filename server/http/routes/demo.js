@@ -80,6 +80,7 @@ export function createDemoRouter({ demo, store, makeToken, hashToken }) {
       const table = await demo.createTable({
         displayName: req.body?.displayName,
         starter: req.body?.starter,
+        environment: req.body?.environment,
         sessionHash: hashToken(token),
         inviteHash: hashToken(invite),
       });

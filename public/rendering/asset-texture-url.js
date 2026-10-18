@@ -1,4 +1,5 @@
 import { BUNDLED_THUMBNAIL_IMAGE, SKY_TEXTURE_SIZES } from '../../shared/image-thumbnails.js';
+import { mahjongFaceLabel } from '../../shared/tile-models.js';
 const LOCAL_ASSET_IMAGE = /^\/assets\/([a-z]+)\/([a-f0-9]{18}\.(?:gif|jpe?g|png|webp))$/i;
 
 // Map a saved source image to the versioned display derivative. External/data/procedural refs and
@@ -16,6 +17,7 @@ export function assetTextureURL(ref, { high = false, thumbnail = false } = {}) {
 // server derivatives. Unsupported refs stay empty.
 export function assetThumbnailURL(ref) {
   if (typeof ref !== 'string') return null;
+  if (mahjongFaceLabel(ref)) return null; // model identity, not an on-disk raster
   if (/^data:image\/(?:webp|png);base64,[a-z0-9+/=]+$/i.test(ref)) return ref;
   if (LOCAL_ASSET_IMAGE.test(ref)) return assetTextureURL(ref, { thumbnail: true });
   if (BUNDLED_THUMBNAIL_IMAGE.test(ref))

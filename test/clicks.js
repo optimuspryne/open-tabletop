@@ -12,17 +12,6 @@ test('right-click opens the menu for every kind except a card', () => {
     assert.equal(route(type, true), type === 'card' ? 'verb' : 'menu', `right-click ${type}`);
 });
 
-test('right-clicking a card still flips it, immediately', () => {
-  // 'verb' means the action fires now — a card must not wait on a possible double.
-  assert.equal(route('card', true), 'verb');
-});
-
-test('a deck no longer defers its right-click', () => {
-  // Split used to be double-right-click, so the first right-click had to wait ~250ms to find out.
-  // It is a menu item now, so the menu opens on the press with no delay.
-  assert.equal(route('deck', true), 'menu');
-});
-
 test('left-click still defers where a double means something', () => {
   assert.equal(route('deck', false), 'double'); // deal now, or draw-to-inspect on a double
   assert.equal(route('die', false), 'double'); // inspectable

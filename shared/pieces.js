@@ -72,7 +72,7 @@ export const TILES = {
   mahjong: { w: 0.34, h: 0.473, t: 0.14, round: 0.06 }, // a chunky mahjong tile (~0.68 × 0.95, image face at the art's 0.72 aspect)
 };
 // The single source of a card/tile's geometry — read by BOTH the client mesh (cardMesh) and the
-// server collider, so rendered size and physics footprint can never drift (same guarantee dieR()
+// server collider, so rendered size and physics footprint can never drift (same guarantee dieGeometrySize()
 // gives dice). Resolves in priority order:
 //   1. props.geom = { w, h, t?, round? } — an EXPLICIT geometry (custom uploads, custom-aspect image
 //      decks: the card is sized to the art, no crop/stretch). Half-extents.
@@ -769,17 +769,17 @@ const DIE_RAW = {
 // table. Note the units differ by geometry: d6 is a half-EDGE (the cube is 2× this across),
 // the polyhedra are a circumradius (farthest vertex) — so the numbers aren't directly
 // comparable, they're matched by eye (see the size-parity render).
-export const DIE_RADIUS = { 4: 0.82, 6: 0.46, 8: 0.72, 10: 0.72, 12: 0.7, 20: 0.7 };
+export const DIE_BASE_SIZE = { 4: 0.82, 6: 0.46, 8: 0.72, 10: 0.72, 12: 0.7, 20: 0.7 };
 // ONE knob for overall dice size: turn this and EVERY die scales together — mesh AND
-// collider, d6 included — because both sides build their geometry from dieR() below.
+// collider, d6 included — because both sides build their geometry from dieGeometrySize() below.
 // Lower = smaller. (Colliders are always derived from size, never entered by hand.)
 export const DIE_SCALE = 0.82;
 // How large the printed numbers are, relative to their face (polyhedral dice only; the d6's
 // pipped-box numbers are separate). 1 = the original size; higher = bigger/more legible.
 export const DIE_GLYPH = 1.42;
-// The size a die is actually built at: its base radius × the global scale. The single source
-// both the client mesh and the server collider read, so they can never disagree on size.
-export const dieR = (sides) => (DIE_RADIUS[sides] || 1) * DIE_SCALE;
+// Scaled geometry size: a d6 half-edge, or a polyhedron's circumradius. Both the client mesh
+// and the server collider use this value; the geometry-specific units above remain unchanged.
+export const dieGeometrySize = (sides) => (DIE_BASE_SIZE[sides] || 1) * DIE_SCALE;
 export const DIE_SIDES = [4, 6, 8, 10, 12, 20];
 
 // Clamp a value to a valid 24-bit color int, else null. Used to sanitize a color that
@@ -788,9 +788,6 @@ export const clampColor = (c) => {
   c = Number(c);
   return Number.isInteger(c) && c >= 0 && c <= 0xffffff ? c : null;
 };
-// Sanitize the props for a spawned die: a valid `sides` (defaulting to d6), plus optional
-// body/number colors clamped to real colors. This is what lets a client spawn a die already
-// in the player's saved default color without being able to inject arbitrary props.
 // Dice finishes (ROADMAP §9): a material look layered on the die color. 'matte' is the default
 // (omitted from props). The client UI reads this list; the renderer maps each key to material params.
 export const DICE_FINISHES = [
@@ -895,6 +892,8 @@ export const DICE_MODELS = {
 };
 export const DICE_MODEL_KEYS = new Set(Object.keys(DICE_MODELS));
 
+// Normalize spawn input to a valid die type (default d6), allowed colors, finish and model.
+// Saved device defaults may supply these fields; arbitrary client props are discarded.
 export function dieSpawnProps(raw = {}) {
   const p = { sides: DIE_SIDES.includes(+raw.sides) ? +raw.sides : 6 };
   const b = clampColor(raw.color);
@@ -926,11 +925,10 @@ export function dieSpawnProps(raw = {}) {
   return p;
 }
 
-// Validate + apply a recolor to a piece's props, by type — the single source both the `recolor`
-// message and the `recolorGroup` batch trust. Returns a NEW props object, or null if the change
-// doesn't fit this piece (wrong type, missing/out-of-range color, a team bowl without a team flag).
+// Validate and immutably apply color, team, finish or tile-material changes by piece type.
+// Both recolor message variants use this contract; incompatible appearance patches return null.
 // `dispDef` is the piece's DISPENSERS entry (dispensers only); pass null otherwise.
-export function colorProps(
+export function applyAppearancePatch(
   type,
   props,
   { color, textColor, team, finish, finishImg, tileAppearance, dominoAppearance } = {},
@@ -1109,7 +1107,7 @@ export function readableInk(color) {
 }
 
 // Raw vertices scaled so the farthest sits at `radius`. null for d6/unknown.
-export function dieVerts(sides, radius = dieR(sides)) {
+export function dieVerts(sides, radius = dieGeometrySize(sides)) {
   const raw = DIE_RAW[sides];
   if (!raw) return null;
   let max = 0;
@@ -1158,7 +1156,10 @@ export const seatAngle = (seat) => SEAT_ANGLES[seat] ?? 0;
 
 // The set of table shapes; 'rect' is the historical default. Interpreted against tableX/tableZ.
 export const TABLE_SHAPES = ['rect', 'round', 'oval', 'hex', 'roundedRect'];
-// Wooden-rim textures (/textures/wood-*.jpg); 'mahogany' is the default.
+// Shared visual/grid/physics sampling for each rounded-rectangle corner.
+export const TABLE_CORNER_SEGMENTS = 20;
+
+// Wooden-rim textures (/textures/wood-*.png); 'mahogany' is the default.
 export const RIM_WOODS = ['mahogany', 'walnut', 'birch', 'green', 'oak'];
 
 // The table's outline as a closed polygon of {x,z} perimeter points, for a shape + half-extents.
@@ -1190,7 +1191,7 @@ export function tableOutline(shape, hx, hz) {
   }
   if (shape === 'roundedRect') {
     const r = Math.min(hx, hz) * 0.2, // corner radius
-      per = 4, // segments per 90° corner arc
+      per = TABLE_CORNER_SEGMENTS, // shared visual/grid/physics corner sampling
       pts = [];
     const corners = [
       { cx: hx - r, cz: hz - r, a0: 0 },

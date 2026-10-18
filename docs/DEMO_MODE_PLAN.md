@@ -1,5 +1,121 @@
 # Public demo mode — staged implementation
 
+## Main synchronization (2026-10-17)
+
+This update merges main through `901d460` (0.23.0) into `codex/public-demo-mode`.
+It includes the current Blender-authored room assets, corrected chairs/windows,
+rear-wall doors/nook, Node 24+ support and coordinated Colyseus 0.18 server/client.
+The existing demo guest/admin flows, temporary credentials, expiry/purge ordering,
+four stored/live tables, 20 connections, 15 dice and 1,000 ms per-die roll cooldown
+are retained. Main and the separately maintained marketing-website branch are not
+updated by this change. The webpage changed here is the demo landing page.
+
+The user approved the concrete desktop/touch room-style picker mockup on 2026-10-17.
+New tables offer **Cozy** (default), **Poker Night**, **Medieval Tavern** and
+**Modern Bar**, separately from **Empty table / Dice / Cards / Chess**. Native radio
+controls preserve keyboard navigation, visible selection/focus, readable compact
+labels and at least 48px tap targets. Invite/resume/expired views hide creation-only
+choices. Busy/success disables both groups; retry retains the choices. No new icon
+is introduced. Existing sessions return their current table even if a create request
+supplies a different style. Ordinary rooms keep Standard as their default; older demo
+rooms migrate to Standard without altering their saved settings.
+
+Reuse decision: extend the existing entry fieldset/render/submit lifecycle and
+`createDemoQueries` allocation transaction. Shared room definitions supply the four
+IDs and labels, and the existing `rooms.room_environment` field and room loader own
+persistence and synchronization. The bootstrap already forwards the request; no new
+scene field, renderer, alternate authentication path or database migration is needed
+for the picker.
+
+### Migration compatibility and deployment
+
+Do not rename or replay the deployed `024_demo_sessions.sql` or
+`025_demo_occupancy.sql`. The existing migrator keys its ledger by **full filename**,
+so these coexist with `024_room_environment.sql`, `025_poker_night.sql`,
+`026_medieval_tavern.sql` and `027_modern_bar.sql`. The fresh baseline records all 29
+files. Existing demos apply the four missing main files, preserving guests, sessions,
+invites, memberships, heartbeat deadlines, snapshots and ordinary accounts.
+A populated 25-file demo upgrade fixture invokes the actual startup migrator twice
+and checks that only those four files apply, with the second run a no-op.
+
+Back up database/uploads; close temporary demo tables before deploying the coordinated
+runtime update. Use Node 24+ and the demo branch's locked dependencies/image, retain
+the migration owner/runtime role split and the existing volumes, restart the demo app,
+then refresh all clients. No additional setting, service, port, deployment or push is
+introduced. Real-device performance and sustained four-table load remain manual checks.
+
+### Resolution and implementation inventory
+
+All main changes are inherited through the merge; their source/asset inventories
+remain in [release notes](RELEASING.md#upgrading-to-0230) and
+[the room-theme plan](PLAN_ROOM_THEMES.md). Files additionally reconciled or changed:
+
+| File | Functions / changes |
+| --- | --- |
+| `shared/room-environments.js` | Add `DEMO_ROOM_ENVIRONMENTS`, `DEFAULT_DEMO_ROOM_ENVIRONMENT`, and `isDemoRoomEnvironment`; reuse canonical room IDs and names with the approved short Cozy label. |
+| `public/demo/entry.js` | Extend `mountDemoEntry`, `render`, `handleSubmit` with creation-only room radios, busy/expiry handling and the `environment` request field. |
+| `public/demo/entry.css` | Add scoped hint styling using shared tokens; reuse the existing choice grid and responsive layout. |
+| `server/http/routes/demo.js` | Existing create route forwards `environment` to validated storage; bearer-session resume still takes precedence. |
+| `server/demo-queries.js` | Extend `createTable` validation/transaction and `tableShape`, `findSession`, `joinInvite` projections with persisted room style; remove obsolete pre-integration comment. |
+| `server/database.js` | Preserve both `createDemoQueries` composition and main's room-environment normalization import. |
+| `postgres/schema.sql` | Preserve temporary identity/occupancy schema, include room environment and record all 29 full migration filenames. Shipped numbered files unchanged. |
+| `scripts/build-icons.mjs` | Preserve website-only generation and Demo page output; canonical pages no longer abort regeneration of other pages. All four existing HTML sprites already match the 168 approved icons; no new icon or HTML rewrite. |
+| `scripts/demo-entry-test.mjs` | Serve shared definitions; verify the four choices/default, selected submission, retry preservation, busy/hide states and existing 16 layout/input combinations. |
+| `scripts/test-database.mjs` | Keep both upgrade suites and demo/multiplayer runners; add populated deployed-demo/actual-migrator regression and `--demo` driver registration. |
+| `scripts/demo-room-test.mjs` | New real-server/browser regression; `waitFor` and `stopServer` bound readiness/cleanup around a disposable test DB, temporary uploads and all four production picker/starter paths. |
+| `package.json` | Retain demo/admin scripts and main dependency/runtime versions; add `test:demo`. Lockfile dependency/version data comes unchanged from main. |
+| `test/backend-demo-queries.js` | Reject invalid/non-demo styles before acquiring a DB connection. |
+| `test/backend-demo-http.js` | Assert selected environment reaches storage through the real HTTP adapter. |
+| `test/backend-scene-persistence.js` | Preserve demo over-cap protections and main's destination-room-environment preservation tests. |
+| `test/backend-security-boundaries.js` | Preserve budget/flood regression; initialize the current Colyseus message-window deadline before exercising its dispatch limit. |
+| `test/integration/database.js` | Fresh ledger expects 29 entries; retain main room-environment round-trip checks. |
+| `test/integration/demo-sessions.js` | Verify default/all four styles, starter independence, invite inheritance, resume and occupancy recovery using real PostgreSQL. |
+| `CHANGELOG.md` | Retain demo Unreleased entries and main release history; record current changes. |
+| `docs/ARCHITECTURE.md`, `docs/REFERENCE.md` | Preserve main/demo sections and document creation/persistence ownership and API contracts. |
+| `docs/RELEASING.md` | Preserve historical guidance and add current demo build, runtime and migration requirements. |
+| `docs/DEMO_MODE_PLAN.md` | This current approval, implementation, verification and deployment record. |
+
+### Current verification
+
+Completed on 2026-10-17 using Node **26.11.1**, npm **12.2.0** (the supported
+minimum remains Node 24):
+
+- `npm ci --no-audit --no-fund`: clean locked dependency installation passed.
+- `npm run check`: lint, formatting, CSS checks and all **1,259** tests passed.
+- `npm run test:integration`: **25** ordinary and **12** demo PostgreSQL tests
+  passed, plus the upgrade fixtures. The populated deployed-Demo test applied
+  exactly main's four missing full filenames, then verified a no-op second run.
+- `npm run test:demo`: the same DB suites and the actual production server/browser
+  passed all four style/starter paths (Cozy/Empty, Poker Night/Dice, Tavern/Cards,
+  Modern Bar/Chess), persisted SQL and synchronized state, existing-session create,
+  refresh, invite inheritance, expiry redirect and reclamation. It used a disposable
+  database, temporary uploads and loopback port; no live deployment was touched.
+- `npm run test:demo-ui`: validation, duplicate prevention, retry retention,
+  selected/default style, busy/hidden states, resume/invite/expiry, teardown and
+  **16** width/pointer/full/compact combinations passed.
+- `npm run test:components`: desktop/touch component checks, all four real room
+  bootstraps, notecard editor at 1280/390/360px and tile/mixed-back/restricted-Show
+  checks at 1280/390/320px passed. The harness reported one `/favicon.ico` 404.
+- `npm run test:input`: **58/58** passed. `test:devices`: all **7** profiles passed.
+  `test:admin-login`: authorization/session/focus checks and **8** layouts passed.
+- `npm run build:icons`: all four canonical sprites validated with **168** existing
+  approved symbols; already-current HTML no longer aborts generation.
+- Documentation links/new synchronization anchors, unchanged shipped migration
+  bytes, historical main changelog entries and staged `git diff --check`: passed.
+
+Implementation and automated verification are complete. No deployment, publication,
+real-device test or sustained load acceptance is implied. The ordinary full multiplayer
+browser suite was not repeated for this update; current actual Demo SDK/server paths
+were exercised by `test:demo` and main's earlier results remain historical evidence.
+
+Manual deployment smoke test: restart the updated Demo app and refresh browsers;
+create each room style with a starter, inspect the furnishings from both seats,
+refresh, join an invite from another browser, and confirm the chosen style persists.
+Check keyboard radios/Enter, full/compact and actual touch layouts, then expiry,
+15-dice/cooldown feedback and admin login. Keep backup/rollback aligned with the
+matching Colyseus client/server pair.
+
+
 ## Main synchronization (2026-10-14)
 
 Merged main through `14444d9` (release 0.22.0) into the existing demo branch.

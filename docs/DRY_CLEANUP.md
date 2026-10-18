@@ -114,7 +114,7 @@ module names remain proposals. Follow [AGENTS.md](../AGENTS.md) for current proj
 - [x] Extract `dispenserItem` and `afterDispense` into the focused
   `server/game/dispenser-operations.js` module.
 - Choose module boundaries from their dependencies; avoid a general-purpose utility dump.
-- Keep color changes authoritative and synchronized; retain shared `colorProps` rules.
+- Keep color changes authoritative and synchronized; retain shared `applyAppearancePatch` rules.
 - Validate single/group recoloring, standing/flat behavior, finite versus infinite
   dispensers, inventory counts, and rejected actions at capacity.
 

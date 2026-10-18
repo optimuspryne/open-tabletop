@@ -49,7 +49,11 @@ test('demo HTTP passes only hashed credentials to storage and resumes a live ses
       return table;
     },
   });
-  const response = await post('/create', { displayName: 'Ada', starter: 'chess' });
+  const response = await post('/create', {
+    displayName: 'Ada',
+    starter: 'chess',
+    environment: 'modern-bar',
+  });
   assert.equal(response.status, 200);
   assert.equal(response.cache, 'no-store');
   const result = JSON.parse(response.body);
@@ -57,6 +61,7 @@ test('demo HTTP passes only hashed credentials to storage and resumes a live ses
   assert.equal(created.inviteHash, hashToken(result.invite));
   assert.notEqual(result.token, result.invite);
   assert.equal(created.displayName, 'Ada');
+  assert.equal(created.environment, 'modern-bar');
   const resume = await fixture(t, {
     async resume(hash) {
       assert.equal(hash, hashToken(result.token));

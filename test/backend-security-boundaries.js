@@ -124,7 +124,7 @@ async function isolatedServer(dir, db, resourceEnv = {}) {
 test('production HTTP matchmaking authenticates before allocation and preserves one durable writer', async (t) => {
   const dir = await mkdtemp(path.join(tmpdir(), 'ott-room-test-'));
   let stateReads = 0;
-  let stored = { ...structuredClone(DEFAULT_ROOM_STATE), notes: 'initial' };
+  let stored = { ...structuredClone(DEFAULT_ROOM_STATE), notes: 'initial', environment: 'cozy' };
   const writes = [];
   let validToken = true;
   let isAdmin = false;
@@ -202,6 +202,7 @@ test('production HTTP matchmaking authenticates before allocation and preserves 
   const room = matchMaker.getLocalRoomById(results[0].body.roomId);
   assert.notEqual(room.roomId, room.persistentRoomId);
   assert.equal(room.persistentRoomId, 'db-A');
+  assert.equal(room.state.environment, 'cozy');
   // An internal duplicate still cannot obtain a second writer or read stale state.
   await assert.rejects(matchMaker.createRoom('table', { code: 'A', token: 'valid' }), {
     code: 409,
@@ -227,6 +228,33 @@ test('production HTTP matchmaking authenticates before allocation and preserves 
   assert.equal(client.auth.participation, 'spectator');
   assert.equal(room.state.players.get(client.sessionId).seat, -1);
   roomAccess.assertActive(room, client);
+  const styleMessage = (actor, environment) =>
+    room._onMessage(
+      actor,
+      getMessageBytes.raw(Protocol.ROOM_DATA, 'roomEnvironment', { environment }),
+    );
+  styleMessage(client, 'standard');
+  assert.equal(room.state.environment, 'cozy', 'A spectator cannot change room settings');
+  const activeSeat = await request('joinOrCreate', 'table', {
+    code: 'A',
+    token: 'valid',
+    participation: 'player',
+  });
+  const activeOwner = transport(activeSeat.body.sessionId);
+  await room._onJoin(activeOwner, {});
+  activeOwner.state = ClientState.JOINED;
+  delete activeOwner._enqueuedMessages;
+  // Participation is durable per account, so explicitly leave the spectator policy.
+  await room.setParticipation(activeOwner, { participation: 'player' });
+  assert.equal(activeOwner.auth.participation, 'player');
+  styleMessage(activeOwner, 'standard');
+  assert.equal(room.state.environment, 'standard');
+  styleMessage(activeOwner, 'cozy');
+  assert.equal(room.state.environment, 'cozy');
+  activeOwner.auth.timedOut = true;
+  styleMessage(activeOwner, 'standard');
+  assert.equal(room.state.environment, 'cozy', 'A time-out blocks even the owner');
+  activeOwner.auth.timedOut = false;
   room.state.notes = 'newer checkpoint';
   await room.saveStateNow();
   assert.deepEqual(writes.at(-1), { id: 'db-A', notes: 'newer checkpoint' });
@@ -311,6 +339,7 @@ test('production HTTP matchmaking authenticates before allocation and preserves 
   const restored = matchMaker.getLocalRoomById(reopened.body.roomId);
   assert.equal(restored.state.notes, 'final checkpoint');
   assert.notEqual(restored.roomId, room.roomId);
+  assert.equal(restored.state.environment, 'cozy');
   await restored.disconnect();
 });
 
@@ -380,7 +409,7 @@ test('production room budgets cover allocation failures, lobbies, editors, joins
   const extra = await matchMaker.joinById(room.roomId, { code: 'A', token: 'two' }, {});
   await assert.rejects(room._onJoin(transport(extra.sessionId), {}), { code: 503 });
   // Real Colyseus dispatch counts even protocol-level pings before decoding payloads.
-  client._lastMessageTime = room.clock.currentTime;
+  client._messageCountResetsAt = room.clock.currentTime + 1000;
   client._numMessagesLastSecond = 0;
   for (let i = 0; i < 4; i++) room._onMessage(client, Buffer.from([Protocol.PING]));
   assert.equal(client.state, ClientState.JOINED);

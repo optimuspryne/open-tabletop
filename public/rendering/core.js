@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { TABLE, tableOutline, offsetOutline } from '/shared/pieces.js';
+import { TABLE } from '/shared/pieces.js';
+import { createTableGeometry, createRimGeometry, TABLE_FINISH } from './table-geometry.js';
 import { normalizeLighting } from '/shared/lighting.js';
 
 // Core client scene — sets up Three.js: scene, camera, renderer, lights, and the
@@ -91,7 +92,7 @@ async function waitForVisualAssets() {
 // --- Graphics quality tiers (docs/ROADMAP.md §1/§12) -----------------------
 // The tablet frame is fill-rate bound (pixel ratio × per-fragment shading, incl. soft-shadow
 // sampling), not draw bound, so quality is four fill-rate presets. Active tier resolves as:
-//   ?q=<tier>  >  localStorage 'tabletop.quality'  >  device default (coarse pointer → medium).
+//   ?q=<tier>  >  localStorage 'tabletop.quality'  >  device default (phone low, tablet medium, desktop high).
 // Per-axis dev knobs (?px, ?shadow, ?shadowtype, ?aa) override individual settings on top, for
 // A/B. setQuality() (exported, and window.setQuality) switches live; antialias is fixed at context
 // creation, so a tier change only re-applies AA on the next load.
@@ -177,8 +178,8 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(_q0.px);
 renderer.shadowMap.enabled = _q0.shadowsOn;
 renderer.shadowMap.type = SHADOW_TYPES[_q0.shadowType];
-// Only redraw the shadow map when scene geometry actually moved — the render loop (client.js
-// animate) sets needsUpdate on frames where a mesh changed. At rest, orbiting the camera no
+// Redraw shadows when piece transforms, geometry or visibility change; client.js retains the
+// previous frame's state and respects explicit lighting/quality refreshes. Orbiting the camera no
 // longer repays the shadow pass every frame.
 renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true; // draw it once at startup
@@ -246,14 +247,48 @@ sun.shadow.bias = -0.0002; // small depth bias to back it up
 
 // Size the sun's shadow frustum to a table half-extent (+ margin for shadows cast past the edge).
 const SHADOW_MARGIN = 4;
+let shadowTableSize = { x: TABLE.x, z: TABLE.z };
+let sceneryShadowBounds = null;
 function fitShadow(hx, hz) {
+  shadowTableSize = { x: hx, z: hz };
   Object.assign(sun.shadow.camera, {
     left: -(hx + SHADOW_MARGIN),
     right: hx + SHADOW_MARGIN,
     top: hz + SHADOW_MARGIN,
     bottom: -(hz + SHADOW_MARGIN),
+    near: 1,
+    far: 55,
   });
+  if (sceneryShadowBounds) {
+    sun.updateWorldMatrix(true, false);
+    sun.target.updateWorldMatrix(true, false);
+    sun.shadow.updateMatrices(sun);
+    const bounds = sceneryShadowBounds
+      .clone()
+      .union(
+        new THREE.Box3(
+          new THREE.Vector3(-hx - SHADOW_MARGIN, -2, -hz - SHADOW_MARGIN),
+          new THREE.Vector3(hx + SHADOW_MARGIN, 8, hz + SHADOW_MARGIN),
+        ),
+      )
+      .applyMatrix4(sun.shadow.camera.matrixWorldInverse);
+    Object.assign(sun.shadow.camera, {
+      left: bounds.min.x - SHADOW_MARGIN,
+      right: bounds.max.x + SHADOW_MARGIN,
+      bottom: bounds.min.y - SHADOW_MARGIN,
+      top: bounds.max.y + SHADOW_MARGIN,
+      // An orthographic directional shadow may include points behind its nominal
+      // light position. Signed near/far preserve the existing light direction.
+      near: -bounds.max.z - SHADOW_MARGIN,
+      far: -bounds.min.z + SHADOW_MARGIN,
+    });
+  }
   sun.shadow.camera.updateProjectionMatrix();
+}
+function setSceneryShadowBounds(bounds) {
+  sceneryShadowBounds = bounds?.clone() || null;
+  fitShadow(shadowTableSize.x, shadowTableSize.z);
+  renderer.shadowMap.needsUpdate = true;
 }
 fitShadow(TABLE.x, TABLE.z); // initial frustum from the default table size
 scene.add(sun);
@@ -279,6 +314,7 @@ const lightingFrame = (value) => {
   ambientLight.color.set(value.ambientColor);
   ambientLight.groundColor.set(value.ambientColor).multiplyScalar(0.16);
   sun.shadow.radius = 1 + value.shadowSoftness * 7;
+  if (sceneryShadowBounds) fitShadow(shadowTableSize.x, shadowTableSize.z);
   renderer.shadowMap.needsUpdate = true;
 };
 
@@ -374,35 +410,31 @@ if (typeof window !== 'undefined') {
 const feltTex = new THREE.TextureLoader().load('/textures/felt.jpg');
 feltTex.colorSpace = THREE.SRGBColorSpace;
 feltTex.wrapS = feltTex.wrapT = THREE.MirroredRepeatWrapping; // reflect at tile edges — no visible seam
-feltTex.repeat.set(0.35, 0.35);
-feltTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+feltTex.repeat.set(TABLE_FINISH.feltRepeat, TABLE_FINISH.feltRepeat);
+feltTex.anisotropy = deviceClass() === 'phone' ? 1 : renderer.capabilities.getMaxAnisotropy();
 
 // The felt geometry for a shape: the shared tableOutline extruded to the slab thickness (1) — the
 // SAME outline the server walls use, so the visible edge and the physics rim line up. Centred on Y
 // so the existing position.y = -0.5 keeps the top surface at y = 0. (Material is DoubleSide, so the
 // extruded cap shows regardless of the outline's winding.)
 function tableGeometry(hx, hz, shape) {
-  const outline = tableOutline(shape || 'rect', hx, hz);
-  const s = new THREE.Shape();
-  outline.forEach((p, i) => (i ? s.lineTo(p.x, p.z) : s.moveTo(p.x, p.z)));
-  s.closePath();
-  const geo = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: false });
-  geo.rotateX(-Math.PI / 2); // shape's plane into world XZ, thickness along +Y (0..1)
-  geo.translate(0, -0.5, 0); // centre on Y like the old box slab
-  geo.computeVertexNormals();
-  return geo;
+  return createTableGeometry(THREE, hx, hz, shape);
 }
 
 const tableMesh = new THREE.Mesh(
   tableGeometry(TABLE.x, TABLE.z, 'rect'),
   new THREE.MeshStandardMaterial({
     color: 0x2f6b4f,
-    roughness: 0.95,
+    roughness: 0.98,
     side: THREE.DoubleSide,
+    shadowSide: THREE.BackSide, // closed slab: block from its underside without felt self-shadow acne
     map: feltTex,
+    bumpMap: deviceClass() === 'phone' ? null : feltTex,
+    bumpScale: TABLE_FINISH.feltBump,
   }),
 );
 tableMesh.position.y = -0.5; // top surface sits at y = 0
+tableMesh.castShadow = true; // the solid slab blocks tabletop-piece shadows from reaching the floor
 tableMesh.receiveShadow = true;
 tableMesh.visible = false; // reveal only after the joined room's durable appearance is applied
 scene.add(tableMesh);
@@ -411,7 +443,6 @@ scene.add(tableMesh);
 // with a slight inward overlap onto the felt, extruded into a low raised lip. Purely visual — the
 // physics walls already sit at the felt edge — and rebuilt with the felt on any resize / reshape.
 // The wood is a GM-chosen texture, swapped on the shared material by setRimWood.
-const RIM = { width: 0.4, lip: 0.35, base: -1, overlap: 0.06 };
 const WOOD_RIM = {
   mahogany: '/textures/wood-mahogany.png',
   walnut: '/textures/wood-walnut.png',
@@ -427,16 +458,15 @@ function woodTexture(name) {
   t = new THREE.TextureLoader().load(url);
   t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(0.5, 0.5);
-  t.center.set(0.5, 0.5);
-  t.rotation = Math.PI / 2; // run the grain across the rim, not along the image's vertical
-  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  // Rail UVs already follow the image's vertical grain; no global rotation/stretch.
+  t.anisotropy = deviceClass() === 'phone' ? 1 : renderer.capabilities.getMaxAnisotropy();
   _woodCache.set(url, t);
   return t;
 }
 const rimMat = new THREE.MeshStandardMaterial({
   map: woodTexture('mahogany'),
-  roughness: 0.6,
+  color: 0xf4e7d2,
+  roughness: TABLE_FINISH.rimRoughness,
   metalness: 0,
 });
 
@@ -447,21 +477,7 @@ function setRimWood(name) {
 }
 
 function rimGeometry(hx, hz, shape) {
-  const felt = tableOutline(shape, hx, hz);
-  const outer = offsetOutline(felt, RIM.width);
-  const inner = offsetOutline(felt, -RIM.overlap); // slightly onto the felt so there's no seam
-  const shp = new THREE.Shape();
-  outer.forEach((p, i) => (i ? shp.lineTo(p.x, p.z) : shp.moveTo(p.x, p.z)));
-  shp.closePath();
-  const hole = new THREE.Path();
-  inner.forEach((p, i) => (i ? hole.lineTo(p.x, p.z) : hole.moveTo(p.x, p.z)));
-  hole.closePath();
-  shp.holes.push(hole);
-  const geo = new THREE.ExtrudeGeometry(shp, { depth: RIM.lip - RIM.base, bevelEnabled: false });
-  geo.rotateX(-Math.PI / 2); // into the world XZ plane, height along +Y
-  geo.translate(0, RIM.base, 0); // base flush with the felt bottom; the lip rises above the felt
-  geo.computeVertexNormals();
-  return geo;
+  return createRimGeometry(THREE, hx, hz, shape);
 }
 
 const rimMesh = new THREE.Mesh(rimGeometry(TABLE.x, TABLE.z, 'rect'), rimMat);
@@ -514,6 +530,7 @@ export {
   renderer,
   controls,
   resizeTable,
+  setSceneryShadowBounds,
   setTableColor,
   setRimWood,
   applyLighting,

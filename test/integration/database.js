@@ -24,7 +24,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 25); // Includes temporary demo identities and rooms.
+  assert.equal(migrations.rows.length, 29); // Main room styles and deployed demo migrations.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -83,6 +83,7 @@ test('users, rooms, membership, and durable state round-trip through PostgreSQL'
   await database.saveRoomState(room.id, {
     scoreboard: [{ id: 's1', label: 'Points', score: 4 }],
     notes: 'integration note',
+    environment: 'medieval-tavern',
     tableX: 12,
     tableZ: 9,
     tableShape: 'hex',
@@ -105,6 +106,22 @@ test('users, rooms, membership, and durable state round-trip through PostgreSQL'
   const state = await database.getRoomState(room.id);
   assert.deepEqual(state.scoreboard, [{ id: 's1', label: 'Points', score: 4 }]);
   assert.equal(state.notes, 'integration note');
+  assert.equal(state.environment, 'medieval-tavern');
+  await database.saveRoomState(room.id, { ...state, environment: 'modern-bar' });
+  assert.equal((await database.getRoomState(room.id)).environment, 'modern-bar');
+  const other = await database.createRoom({ ownerId: owner.id, code: 'OTHERROOM', name: 'Other' });
+  assert.equal((await database.getRoomState(other.id)).environment, 'standard');
+  const fresh = createDatabase(new pg.Pool({ connectionString }));
+  try {
+    assert.equal((await fresh.getRoomState(room.id)).environment, 'modern-bar');
+    assert.equal((await fresh.getRoomState(other.id)).environment, 'standard');
+  } finally {
+    await fresh.close();
+  }
+  await assert.rejects(
+    pool.query('UPDATE rooms SET room_environment = $2 WHERE id = $1', [room.id, 'invalid']),
+    (error) => error.code === '23514',
+  );
   assert.equal(state.tableX, 12);
   assert.equal(state.tableZ, 9);
   assert.equal(state.tableShape, 'hex');

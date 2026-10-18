@@ -52,18 +52,19 @@ restarts never reset its password. Two named volumes keep your data:
 `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 > **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
-> `image: optimuspryne/open-tabletop:0.22.0` to pull the published image instead. Upgrading later is
+> `image: optimuspryne/open-tabletop:0.23.0` to pull the published image instead. Upgrading later is
 > `docker compose pull && docker compose up -d` — the app auto-applies any new migrations itself.
 >
 > **Playing beyond your LAN?** Put it behind a reverse proxy with TLS — see
 > [Security & production posture](#security--production-posture).
 
-**Upgrading from 0.21.1 to 0.22.0:** pull the updated image, recreate the app container,
-then refresh all browsers for the new models, card artwork, hand previews and stacking behavior.
-No new migration or required configuration change is introduced. Source installs should run
-`npm ci` before restart. Existing Wordy rooms need board reselection and recalibration to use
-the revised board height/grid, or a fresh Wordy starter.
-See [0.22.0 upgrade notes](docs/RELEASING.md#upgrading-to-0220); upgrades from older versions
+**Upgrading from 0.22.0 to 0.23.0:** back up the database and uploads, update/recreate
+all app instances, and refresh all browsers together for Colyseus 0.18 and the new room
+styles. Startup applies additive migrations 024–027 using the existing migration role;
+existing rooms default to Standard and saved table/lighting settings are preserved.
+Source/native installs require **Node.js 24+** and a locked `npm ci` before restart.
+No new service, port or required environment variable is introduced.
+See [0.23.0 upgrade notes](docs/RELEASING.md#upgrading-to-0230); upgrades from older versions
 must also follow the preceding release instructions there.
 
 Prefer to run it directly with Node, bring your own Postgres, or deploy through Portainer? Those
@@ -71,8 +72,9 @@ paths are below.
 
 ## Run via NPM
 
-The package declares Node.js 20.9 or newer for the runtime. Use **Node.js 24** for the
-current npm launch commands and locked development tools, matching the production container.
+Requires **Node.js 24 or newer**. Node.js 24 is the production and CI target;
+[.nvmrc](.nvmrc) selects that major for local development (`nvm use` if you use nvm).
+Newer distro-provided runtimes satisfy the minimum but need deployment verification.
 See the [ordered Node.js setup](website/wiki/node.html) for database grants and bootstrap setup
 before the first start.
 
@@ -215,7 +217,7 @@ docker run --name open-tabletop-app -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
   -e REDIS_URL=redis://redis-host:6379 \
-  optimuspryne/open-tabletop:0.22.0
+  optimuspryne/open-tabletop:0.23.0
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
@@ -305,7 +307,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.22.0
+    image: optimuspryne/open-tabletop:0.23.0
     user: appuser                         # matches the image's non-root runtime user
     restart: unless-stopped
     container_name: open-tabletop-app
@@ -427,10 +429,10 @@ variants are outside this installer’s scope. Full VM installation testing on e
 still pending; automated command-mocked tests cover provisioning and update behavior.
 
 It reuses the Proxmox native installer for releases, separate database roles, credentials,
-upload storage, backups, and the non-root systemd service. Debian/Ubuntu use NodeSource Node.js 26,
+upload storage, backups, and the non-root systemd service. Debian/Ubuntu use NodeSource Node.js 24,
 the distro’s PostgreSQL package, and Redis. Fedora/Arch use their Node.js/npm, PostgreSQL, and
 Valkey packages ([Fedora package](https://packages.fedoraproject.org/pkgs/valkey/valkey/),
-[Arch package](https://archlinux.org/packages/extra/x86_64/valkey/)); Node.js 22.12 or newer
+[Arch package](https://archlinux.org/packages/extra/x86_64/valkey/)); Node.js 24 or newer
 is required. Arch installation runs a full
 `pacman -Syu --needed --noconfirm` to avoid partial upgrades. Install `git` first for repository
 fetches (`apt install git`, `dnf install git`, or `pacman -Syu git` as appropriate).
@@ -551,7 +553,7 @@ host**, download only `open-tabletop.sh`. It fetches the app source from
 `https://github.com/optimuspryne/open-tabletop.git` at `main` by default and extracts its companion
 `proxmox/install.sh` from that same source revision. It creates an unprivileged Debian 13 LXC with
 nesting enabled so Debian's Redis systemd service can create its user namespace;
-the companion installs Node.js 26, PostgreSQL 16, Redis, and the app directly inside it and enables
+the companion installs Node.js 24, PostgreSQL 16, Redis, and the app directly inside it and enables
 a non-root systemd service. Docker is not used. The Proxmox host needs `git` for this fetch.
 Nesting does not make the container privileged, but it relaxes isolation by exposing some host
 `/proc` and `/sys` information to the guest.
@@ -762,6 +764,7 @@ server/
 shared/pieces.js       shared piece physics/render data, registries, geometry, grids, and trays
 postgres/              numbered migrations, flattened schema, and app-role grants
 scripts/               admin roles, icon generation, secret migration, DB integration runner
+tools/model-authoring/  offline lossless GLB publisher and pinned authoring dependencies
 test/                  unit/harness tests plus PostgreSQL integration tests
 docs/                  architecture, code reference, credits, release, and design notes
 docker/                first-start least-privilege Postgres role setup
@@ -794,6 +797,11 @@ Restart the server afterward. Production serving, browser test fixtures, and `as
 all use this setting; browser code and saved URLs need no edits. Keep deployments supplied with
 the configured directory if it lives outside the application tree. Uploaded assets continue to
 use `ASSETS_DIR` and `/assets/...` independently.
+
+The lossless GLB publisher is backed up under `tools/model-authoring/`, with its own
+pinned dependency lockfile. See the [model publishing guide](public/static_assets/models/README.md)
+for installation and usage. These offline tools are excluded from the Docker image
+and add no app runtime dependencies.
 
 The main game-client chain is `shared ← core ← graphics ← client`; `client`
 composes the focused `table/` controllers and also imports `controls` and

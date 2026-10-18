@@ -30,3 +30,17 @@ test('owned GPU resources and canvas storage are freed once while shared maps su
   assert.equal(calls.has(finish), false);
   assert.equal(root.userData.ottDisposed, true);
 });
+
+test('an owned palette releases unused materials and shared image references exactly once', () => {
+  const texture = new THREE.Texture();
+  const used = new THREE.MeshBasicMaterial({ map: texture });
+  const unused = new THREE.MeshBasicMaterial({ map: texture });
+  const root = new THREE.Group();
+  root.add(new THREE.Mesh(new THREE.BoxGeometry(), used));
+  const calls = new Map();
+  for (const resource of [texture, used, unused])
+    resource.addEventListener('dispose', () => calls.set(resource, (calls.get(resource) || 0) + 1));
+  disposeHierarchy(root, [used, unused]);
+  disposeHierarchy(root, [used, unused]);
+  for (const resource of [texture, used, unused]) assert.equal(calls.get(resource), 1);
+});

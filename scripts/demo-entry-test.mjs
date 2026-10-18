@@ -16,6 +16,7 @@ const html = (await readFile(resolve(repo, 'test/fixtures/demo-entry.html'), 'ut
 const fixture = await readFile(resolve(repo, 'test/fixtures/demo-entry.js'), 'utf8');
 const server = await serveDir({
   root: resolve(repo, 'public'),
+  mounts: { '/shared/': resolve(repo, 'shared') },
   routes: {
     '/': { body: html },
     '/preview-fixture.js': { body: fixture, type: 'application/javascript' },
@@ -32,6 +33,16 @@ if (process.argv.includes('--serve')) {
     browser = await launch();
     const page = await newPage(browser, { url: server.origin });
     const evaluate = page.evaluate;
+    assert.deepEqual(
+      await evaluate(
+        `[...document.querySelectorAll('[name="environment"]')].map(input => input.value)`,
+      ),
+      ['cozy', 'poker-night', 'medieval-tavern', 'modern-bar'],
+    );
+    assert.equal(
+      await evaluate(`document.querySelector('form').elements.environment.value`),
+      'cozy',
+    );
     const scenario = (value) =>
       evaluate(
         `document.querySelector('#scenario').value=${JSON.stringify(value)}; document.querySelector('#scenario').dispatchEvent(new Event('change'))`,
@@ -44,7 +55,7 @@ if (process.argv.includes('--serve')) {
     assert.equal(await evaluate(`document.activeElement.id`), 'demo-name');
     assert.equal(await evaluate(`window.demoPreview.calls.length`), 0);
     await evaluate(
-      `document.querySelector('#demo-name').value='  Ada  '; document.querySelector('[value="chess"]').checked=true`,
+      `document.querySelector('#demo-name').value='  Ada  '; document.querySelector('[value="chess"]').checked=true; document.querySelector('[value="modern-bar"]').checked=true`,
     );
     await submit();
     await submit();
@@ -62,6 +73,7 @@ if (process.argv.includes('--serve')) {
       action: 'start',
       displayName: 'Ada',
       starter: 'chess',
+      environment: 'modern-bar',
     });
     await submit();
     assert.equal(
@@ -69,12 +81,24 @@ if (process.argv.includes('--serve')) {
       1,
       'successful submission stays disabled until navigation',
     );
+    assert.equal(
+      await evaluate(`document.querySelector('[data-demo="environments"]').disabled`),
+      true,
+    );
     await scenario('capacity');
     await evaluate(
-      `document.querySelector('#demo-name').value='Ada'; document.querySelector('[value="cards"]').checked=true`,
+      `document.querySelector('#demo-name').value='Ada'; document.querySelector('[value="cards"]').checked=true; document.querySelector('[value="poker-night"]').checked=true`,
     );
     await submit();
     await settle();
+    assert.equal(
+      await evaluate(`document.querySelector('form').elements.environment.value`),
+      'poker-night',
+    );
+    assert.equal(
+      await evaluate(`document.querySelector('[data-demo="environments"]').disabled`),
+      false,
+    );
     assert.equal(await evaluate(`document.activeElement.id`), 'demo-error');
     assert.equal(await evaluate(`document.querySelector('#demo-name').value`), 'Ada');
     assert.equal(await evaluate(`document.querySelector('form').elements.starter.value`), 'cards');
@@ -94,11 +118,19 @@ if (process.argv.includes('--serve')) {
     await settle();
     assert.doesNotMatch(await evaluate(`document.body.textContent`), /private detail/);
     await scenario('resume');
+    assert.equal(
+      await evaluate(`document.querySelector('[data-demo="environments"]').hidden`),
+      true,
+    );
     assert.equal(await evaluate(`document.querySelector('[data-demo="starters"]').hidden`), true);
     await submit();
     await settle();
     assert.deepEqual(await evaluate(`window.demoPreview.calls[0]`), { action: 'resume' });
     await scenario('invite');
+    assert.equal(
+      await evaluate(`document.querySelector('[data-demo="environments"]').hidden`),
+      true,
+    );
     await submit();
     await settle();
     assert.deepEqual(await evaluate(`window.demoPreview.calls[0]`), {
@@ -106,6 +138,10 @@ if (process.argv.includes('--serve')) {
       displayName: 'Guest',
     });
     await scenario('expired-invite');
+    assert.equal(
+      await evaluate(`document.querySelector('[data-demo="environments"]').hidden`),
+      true,
+    );
     assert.match(
       await evaluate(`document.querySelector('#demo-error').textContent`),
       /invite has expired/,
@@ -122,6 +158,10 @@ if (process.argv.includes('--serve')) {
     assert.match(
       await evaluate(`document.querySelector('#demo-error').textContent`),
       /table has expired/,
+    );
+    assert.equal(
+      await evaluate(`document.querySelector('[data-demo="environments"]').hidden`),
+      true,
     );
     await scenario('start');
     await evaluate(`document.querySelector('[value="empty"]').focus()`);

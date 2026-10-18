@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStarterSetup } from '../server/game/starters.js';
 import { clearGameTable } from '../server/game/scene-persistence.js';
-import { BOARDS, PROPS, TABLE, dieR } from '../shared/pieces.js';
+import { BOARDS, PROPS, TABLE, dieGeometrySize } from '../shared/pieces.js';
 
 function makeHarness({ maxPieces = 250, grid = { cellX: 2, cellZ: 3 } } = {}) {
   const events = [];
@@ -152,8 +152,8 @@ for (const [game, count, bonusTiles] of [
     assert.deepEqual(
       dice.map((piece) => piece.pos),
       [
-        [-0.75, dieR(6) + 0.03, 0],
-        [0.75, dieR(6) + 0.03, 0],
+        [-0.75, dieGeometrySize(6) + 0.03, 0],
+        [0.75, dieGeometrySize(6) + 0.03, 0],
       ],
     );
     assert.ok(dice.every((piece) => piece.props.sides === 6 && piece.props.model === 'pip-round'));

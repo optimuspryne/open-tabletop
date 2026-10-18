@@ -1,6 +1,7 @@
 import { Schema, MapSchema, defineTypes, view } from '@colyseus/schema';
 import { TABLE } from '../../shared/pieces.js';
 import { FACTORY_LIGHTING } from '../../shared/lighting.js';
+import { DEFAULT_ROOM_ENVIRONMENT } from '../../shared/room-environments.js';
 
 // defineTypes() is the no-build-step way to declare schema in plain JS.
 // Clients rebuild this schema automatically via reflection, so declaration order is part of the
@@ -183,6 +184,7 @@ export class State extends Schema {
     this.scale = new RoomScale();
     this.overlays = new MapSchema();
     this.lighting = new Lighting();
+    this.environment = DEFAULT_ROOM_ENVIRONMENT;
   }
 }
 defineTypes(State, {
@@ -206,6 +208,7 @@ defineTypes(State, {
   scale: RoomScale,
   overlays: { map: Overlay },
   lighting: Lighting,
+  environment: 'string',
 });
 
 // Pieces are explicitly admitted to each client view by the visibility service.

@@ -1,3 +1,7 @@
+import {
+  DEFAULT_DEMO_ROOM_ENVIRONMENT,
+  DEMO_ROOM_ENVIRONMENTS,
+} from '../../shared/room-environments.js';
 import { applyIcons } from '../ui/icons.js';
 
 const ACTIONS = {
@@ -51,6 +55,13 @@ export function mountDemoEntry(
               <input id="demo-name" name="displayName" type="text" autocomplete="nickname"
                 maxlength="20" required aria-describedby="demo-error">
             </div>
+            <fieldset data-demo="environments" aria-describedby="demo-style-hint">
+              <legend>Room style</legend>
+              <div class="demo-entry__choices">
+                ${DEMO_ROOM_ENVIRONMENTS.map(({ id, name }) => `<label><input type="radio" name="environment" value="${id}"${id === DEFAULT_DEMO_ROOM_ENVIRONMENT ? ' checked' : ''}><span>${name}</span></label>`).join('')}
+              </div>
+              <small id="demo-style-hint" class="demo-entry__hint">Sets the room around your table.</small>
+            </fieldset>
             <fieldset data-demo="starters">
               <legend>Choose a starting table</legend>
               <div class="demo-entry__choices">
@@ -100,6 +111,8 @@ export function mountDemoEntry(
     submit.hidden = expired;
     form.setAttribute('aria-busy', String(busy));
     name.disabled = busy || complete;
+    find('environments').disabled = busy || complete;
+    find('environments').hidden = currentMode !== 'start' || expired;
     find('starters').disabled = busy || complete;
     find('starters').hidden = currentMode !== 'start' || expired;
     find('name-field').hidden = currentMode === 'resume' || expired;
@@ -171,7 +184,9 @@ export function mountDemoEntry(
         {
           action: currentMode,
           ...(currentMode !== 'resume' ? { displayName } : {}),
-          ...(currentMode === 'start' ? { starter: form.elements.starter.value } : {}),
+          ...(currentMode === 'start'
+            ? { starter: form.elements.starter.value, environment: form.elements.environment.value }
+            : {}),
         },
         { signal: lifetime.signal },
       );

@@ -8,18 +8,13 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
-### Changed
-- Synchronized the demo branch with main through release 0.22.0, preserving guest/admin
-  flows, four-table capacity, 15-dice limits and shared roll cooldowns. Restart the server
-  and refresh clients; see [demo synchronization notes](docs/DEMO_MODE_PLAN.md#main-synchronization-2026-10-14)
-  for upgrade and verification status.
-- Reduced the public demo to four stored tables and four live rooms after the five-table,
-  75-d20, 20-connection stress test reached 100% CPU and about 30 average ticks/second
-  (operator observations). The 15-dice cap, one-second cooldown and 20-connection budget
-  remain unchanged. Close/expire old temporary tables before rebuilding/restarting; no
-  migration. A sustained four-table/20-connection retest remains pending.
-
 ### Added
+
+- Public demo creation now offers Cozy (default), Poker Night, Medieval Tavern and
+  Modern Bar independently of the Empty/Dice/Cards/Chess starter. The approved
+  desktop/touch picker retains labels in compact mode. The server validates the
+  selection before allocation and saves it with the room; invites and resumed
+  sessions inherit the existing choice.
 - Demo rooms now enforce 15 dice across the table and all trays, and a shared one-second
   cooldown per die for single/group/tray rolls. New/restored dice start on cooldown;
   over-cap scenes/checkpoints reject before mutation. Approved, coalesced feedback uses
@@ -63,7 +58,26 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   `ROOM_MAX_*` variables and restart the server. No migration or UI change. Temporary guests,
   expiring tables and the proposed demo UI remain planned in `docs/DEMO_MODE_PLAN.md`.
 
+### Changed
+
+- Synchronize the Demo branch with main through 0.23.0 (`901d460`), retaining guest,
+  admin, expiry, four-table/20-connection limits and the 15-dice/one-second policies.
+  Deployed demo migration filenames are preserved alongside main's 024–027 room
+  migrations; the fresh ledger contains 29 full filenames. Upgrade to Node 24+,
+  rebuild/restart the demo-specific app and refresh all clients together. See
+  [demo synchronization and validation](docs/DEMO_MODE_PLAN.md#main-synchronization-2026-10-17).
+- Synchronized the demo branch with main through release 0.22.0, preserving guest/admin
+  flows, four-table capacity, 15-dice limits and shared roll cooldowns. Restart the server
+  and refresh clients; see [demo synchronization notes](docs/DEMO_MODE_PLAN.md#main-synchronization-2026-10-14)
+  for upgrade and verification status.
+- Reduced the public demo to four stored tables and four live rooms after the five-table,
+  75-d20, 20-connection stress test reached 100% CPU and about 30 average ticks/second
+  (operator observations). The 15-dice cap, one-second cooldown and 20-connection budget
+  remain unchanged. Close/expire old temporary tables before rebuilding/restarting; no
+  migration. A sustained four-table/20-connection retest remains pending.
+
 ### Fixed
+
 - Admin user rows now display an em dash for missing email addresses, allowing temporary
   demo guests to appear without breaking console initialization.
 - Fixed demo dice starter matchmaking: spawn five canonical `die` pieces with
@@ -75,6 +89,325 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Added a disposable PostgreSQL regression test for initialization, password quoting,
   current/future table and sequence access, and denied schema creation. Existing partially
   initialized databases still require the two default-privilege grants to be applied manually.
+
+## [0.23.0] — 2026-10-17
+
+**Upgrade:** source/native installs now require **Node.js 24+**. Back up database/uploads,
+apply additive migrations **024–027** through the configured migration role, restart the
+updated server and refresh all clients together for Colyseus 0.18. Existing rooms default
+to Standard; existing table/lighting/sky settings and saved games are retained. See the
+[upgrade and validation guide](docs/RELEASING.md#upgrading-to-0230).
+
+This release adds Cozy, Poker Night, Medieval Tavern and Modern Bar room styles,
+Blender-authored furnishings and adaptive cutaways, table/skybox polish, current-model
+library previews and a single lossless canonical catalog of 132 GLBs (89,086,064 bytes).
+Implementation-stage notes below retain the source/provenance and verification history;
+final sources, acceptance and current counts are recorded in the room-theme plan.
+
+### Changed
+- Furnish the approved rear walls: Modern Bar gets a black-framed glass door and
+  small teal booth/cafe table on the reverse viewer's left; Poker Night gets a
+  windowed walnut door; Medieval Tavern gets a second matching leaded window.
+  Reuse existing wall cutaways, adaptive layout, occupied seating and model owners.
+  Clip plaster, paneling and trim around glazed openings. Client refresh only;
+  no additional migration, physics, input or lighting change is introduced.
+  All 1,229 code tests, 132 model checks and the three real-model desktop/touch
+  bootstrap scenarios pass. The user accepted the final room views on 2026-10-17;
+  real-device performance remains manual.
+- Add the approved **Modern Bar** room style using eleven Blender-authored
+  furnishing models, walnut floor/slats, brick, brass, a teal booth, leather chairs
+  and decorative LED pendants. Reuse shared room/seating/cutaway/resource owners;
+  matching explicitly applies Walnut and deep teal felt. Keep table dimensions,
+  saved lighting/sky, physics and gameplay independent. Room enclosures now use
+  the shared hex outline when width and saved depth differ. Apply additive
+  migration 027 through the migration role, restart and refresh clients.
+  All 1,222 code tests, 129 model checks, full desktop/touch components, 25 database
+  tests and seven device profiles pass. Actual-device/gameplay acceptance remains.
+- Add the approved **Medieval Tavern** room style using eight Blender-authored
+  furnishing models, oak framing/floor, limestone and limewash, arched hearth,
+  leaded window, bar, stools/bench and iron candle wheel. Reuse shared occupancy,
+  cutaways, mobile materials, fallback loading and cleanup. Explicit matching
+  applies Oak/moss felt; selecting the room preserves table settings, sky and
+  lighting. Apply additive migration 026, restart the server and refresh clients.
+  No game rules, input path, physics or runtime lights are added.
+  Code checks pass 1,203 tests; all 118 bundled models, desktop/touch components,
+  25 database tests and seven device profiles pass. Manual gameplay/device QA remains.
+- Upgrade the coordinated Colyseus stack to core 0.18.18, WebSocket transport
+  0.18.4, schema 5.0.40 and the self-hosted SDK 0.18.5 after published peer/integrity
+  verification. Keep the existing JS schema, physics and saved-game formats.
+  Make table/editor static admission independent of callback binding, persist
+  rotated reconnect tokens, resend private hands after access-checked reconnects,
+  and finish feature leave handlers before replacing the disconnect screen DOM.
+  Add real-server/browser privacy, admission, reconnect and save/restart regressions
+  through the existing disposable PostgreSQL harness and CI job. Restart the server
+  and refresh clients together; no new migration or CSP permission is introduced.
+  User reported normal functionality after local multiplayer smoke testing on
+  2026-10-16. The upgrade has not been pushed or deployed.
+- **Breaking for source/native installs:** require Node.js 24 or newer, with `.nvmrc`,
+  production CI and fresh Debian/Ubuntu native provisioning targeting Node 24 to
+  match Docker. Native upgrades reject an
+  older service runtime before backup or activation. CI now builds the production
+  Alpine image and runs existing schema, access/privacy and native image-processing
+  regressions inside it. Package versions and Colyseus remain unchanged. Source/native
+  operators on Node 20/22 must upgrade Node before updating; see the runtime upgrade notes.
+
+### Documentation
+- Add Blender review studies for the three empty rear walls: a glazed Modern Bar
+  entry and compact teal corner booth/table, a windowed walnut Poker Night door,
+  and a second corrected Medieval Tavern window. Keep current sources and runtime
+  source assets intact. The final layouts were subsequently approved and integrated.
+- Add an editable Modern Bar mockup authored through background BlenderMCP,
+  with actual Cycles room/seated renders: walnut slats, dark stone bar, brass,
+  backlit bottles, exposed brick, tan leather chairs, teal booth and evening window.
+  Preserve the live unsaved Tavern source. Record design/provenance/source checks;
+  the final approved mockup is integrated with its source preserved. The user confirmed the
+  preceding Tavern window fixes look good and flickering is gone.
+- Add an editable BlenderMCP Medieval Tavern mockup in the companion asset
+  workspace, with actual Cycles room/seated renders: oak framing and furniture,
+  limestone hearth, leaded window, bar, barrels and iron candle wheel. Record
+  source checks/provenance and the later approved integration. The review stage
+  itself changed no runtime theme, bundled model, physics or lighting.
+- Add an editable BlenderMCP-authored Poker Night asset redesign and actual
+  chair/room/furnishings Cycles review renders in the companion asset workspace.
+  Record source provenance and material/UV/frame checks. The later approved
+  Blender derivatives replace the initial procedural room furnishings; the review
+  stage itself preserved runtime assets.
+- Record fourteen room-theme concepts in `docs/PLAN_ROOM_THEMES.md`, the approved
+  Poker Night concept/prompt, implementation decisions and verification gates.
+- Move the living hardening plan into `docs/` and update relative links; preserve
+  its findings, status and historical evidence.
+- Added a dependency inventory, maintenance procedure and source-based Colyseus 0.18
+  upgrade assessment. Recorded the separate runtime/offline/vendored dependency sets,
+  existing Node support inconsistencies, coordinated upgrade gates and pending live
+  verification. The documentation slice did not upgrade packages or enable scheduled
+  automation; the separate Node prerequisite is recorded above.
+
+### Fixed
+- Correct Modern Bar chair-back piping in Blender so it follows the beveled
+  upholstery, with a slight rearward back lean. Replace the pendant's coarse
+  relief with smooth satin brass. Preserve the approved source in a separate
+  revision and republish only these two models. Real-model browser regressions
+  check piping clearance and the satin material. Client hard refresh only.
+- Correct the remaining Medieval Tavern window reveal flicker by sizing the
+  plaster cutout within the solid timber surround on all four edges. Mirror the
+  good left shutter's position for the right shutter in a new Blender source,
+  retaining both earlier source snapshots. Real-model browser regressions check
+  reveal depth separation and shutter symmetry. All 1,204 code tests, the focused
+  desktop/touch component scenario and 118-model GPU suite pass. Client refresh only.
+- Correct Medieval Tavern window fit: move shutter leaves clear of plaster,
+  preserve the owner's moved right shutter in a separate Blender source, recess
+  exterior plaster behind the casing and keep timber posts out of its surround.
+  Restore adaptive oak trestles from floor to tabletop using shared outlines and
+  rendering assembly; table physics and picking stay unchanged. Refresh clients;
+  no migration or server restart is required for this correction.
+- Compare Poker Night scene ownership as booleans in regression assertions so a
+  failed cutaway or lifecycle check cannot expand an entire Three.js scene graph
+  into its error report. Update the curtain check for the authored-window fallback
+  group. All three focused Poker Night tests pass with a 192 MiB JavaScript heap;
+  `npm run check` passes all 1,190 tests using one worker and 512 MiB per process.
+- Keep Cozy walls, attached furnishings and gables visible while the camera remains
+  inside the room, replacing early angle-based cutaways with actual wall boundaries.
+  Keep the ceiling above the eaves until the camera crosses the pitched roof;
+  outside-wall and above-roof views still cut away to reveal the table. Add a small
+  re-entry buffer to prevent boundary flicker. Reuse the existing visibility owner
+  and resource lifecycle. Refresh clients; no server restart is needed.
+- Library tile sets and starter games now preview the current Domino and Mahjong
+  GLBs using the shared lazy thumbnail renderer, including full/compact and touch
+  layouts. Removed the 42 replaced Mahjong PNGs (about 2.35 MiB); saved face IDs
+  remain unchanged, with generated text faces during model loading or failure.
+  The two legacy lotus/peony PNGs remain for saved tiles with no matching GLB.
+  Browser fixtures serve those retained images and fail on missing Mahjong thumbnail
+  derivatives. Refresh clients to load these changes; no server restart is needed.
+- Repaired browser regression fixtures to prepare collider number inputs through the
+  production table shell, compare the production sheet predicate against rendered CSS,
+  and require the Library color control to reveal visible swatches. Component snapshots
+  are now collected only with `--out`; ordinary checks retain their behavior assertions.
+  Collider fixtures unpack bundled models into integrity-checked ordinary uploads and
+  report unexpected alerts instead of stalling the headless browser.
+  Consolidated message-registration coverage and removed 12 redundant test cases while
+  preserving the legacy asset-message guard and unique gameplay/rendering checks.
+  Test-only changes; no server restart or client refresh is required.
+- Repaired the custom Go board Blender source (`Open-Tabletop_Asset_Builders/3d_models/original/BLEND/go_board.blend`):
+  continuous bamboo UVs across the wooden cells and rim, unfolded side walls at
+  matching texture density, and restored/packed the original color and normal maps.
+  Geometry, grid markings and material settings are preserved. Saved an original
+  backup and before/after renders in the sibling `go_board_uv_fix/` directory;
+  verified by reopening the source. Re-exported the corrected GLB to the asset
+  library and replaced the app's bundled `models/boards/go_board.glb`, preserving
+  geometry, normals, triangle indices, material definitions and embedded textures.
+  Refresh clients to load the updated board; no server restart is needed.
+
+### Added
+- Add the approved Poker Night room: walnut paneling, olive plaster, leather
+  chairs at occupied seats, curtains, sideboard, green pendant, framed landscapes,
+  plants and a charcoal rug. Reuse the existing theme lifecycle, batching,
+  cutaways, surface geometry, phone policy and credited textures/plant model;
+  final furnishings use nine Blender-authored GLBs, including the rear door.
+  Room style is shared and saved; optional
+  **Use matching table** applies Walnut/green felt while preserving shape, size,
+  lighting and sky. Apply migration 025, restart the server and refresh clients.
+  Full check (1,182 tests), component, seven-device and database integration
+  checks pass; inspected seated/overhead runtime previews are linked in the plan.
+  Physical-device performance and user gameplay testing remain pending.
+- Applied the approved lower default seated view (about 18° on the baseline table),
+  with eye height capped on large tables so Cozy's ceiling stays visible. Join,
+  seat changes and **My Seat** reuse this framing; **Birds Eye** still fits overhead.
+  Cozy's table is about 5 cm lower relative to the floor (roughly 74 cm high),
+  with shorter supports and floor-relative windows/furnishings. Tabletop physics,
+  pieces and hands retain their coordinates. Refresh clients; no restart/migration.
+- Integrated the approved Blender ceiling into Cozy: exposed oak ridge/rafters,
+  warm plaster and two large skylights flanking the peak. Piecewise fitting follows
+  room sizes while retaining timber sections, joinery offsets and physical UVs;
+  overhead/elevated cameras cut the ceiling away. Skylights show the selected sky
+  with lightweight desktop glazing and clear phone apertures. The 1.12 MB lossless
+  model uses five roof batches plus two gable cutaways, a load-failure fallback and room-owned cleanup.
+  Authoring masters remain in companion `cozy_ceiling_v1/`. Refresh clients; no
+  server restart or migration is needed. Real-device visual review remains pending.
+- Versioned the lossless asset-builder scripts under `tools/model-authoring/`,
+  including the pinned dependency manifest/lockfile and publishing guide. The
+  publisher now defaults to its containing repository, so a fresh checkout can
+  reproduce exports without the external asset-builder folder. Authoring packages
+  remain isolated from app dependencies and excluded from Docker deployments.
+- Removed the duplicate uncompressed built-in GLBs after owner comparison. The
+  lossless files now occupy their original canonical paths, preserving saved URLs
+  and reclaiming 100.12 MB of comparison payloads. Final GLBs total 64.81 MB.
+  Added a verified one-asset offline publishing workflow and manifest with decoded
+  geometry/image fingerprints and browser baselines, so originals are not needed
+  in the deployed app. Authoring masters stay outside the app. See
+  `public/static_assets/models/README.md` for future exports; refresh clients.
+- Applied lossless Meshopt and pixel-identical WebP where smaller to all 101
+  bundled original GLBs: 100.12 MB → 64.81 MB (35.3% fewer bytes before HTTP
+  encoding). Preserved every original as a backup, including the corrected Go
+  board. Shared rendering/previews now select exact allowlisted derivatives;
+  saved URLs, server measurements and uploaded-model loading remain compatible.
+  No quantization, simplification, texture downscaling or CSP changes. Backups
+  add disk space; decoded GPU memory stays the same. Refresh clients. See the
+  current per-model manifest and publishing notes in `models/README.md` and
+  `docs/ART_DIRECTION.md`.
+- Cozy now loads a 7.49 MB lossless Meshopt/WebP shelf instead of the 15.94 MB
+  original, reducing its unencoded download by 53%. The original remains bundled
+  as a backup and is not fetched during normal room loading. Added a locally
+  hosted MIT-licensed JavaScript Meshopt decoder to the room loader, preserving
+  the enforced CSP without WebAssembly/eval permissions or a build step. Geometry,
+  decoded texture pixels, desktop materials and phone fallback remain. Added the
+  approved meshoptimizer library credit. Refresh clients; no migration or server
+  restart is needed. See `docs/ART_DIRECTION.md` for the comparison and integration.
+- Added **Room style** above Shape in Room Settings → Table Size & Color, with
+  Standard (skybox only) and Cozy game room. Authorized GM/owner changes synchronize
+  to every client and persist independently for each room across reloads/restarts.
+  Switching disposes old scenery; table finish, lighting and skybox stay independent.
+  Scenes/resets preserve room style; saved state now takes precedence over old cozy
+  preview links. Migration `024_room_environment.sql`, a server restart and browser
+  refresh are required. Existing rooms default to Standard.
+- Refactored the cozy preview into a reusable room-theme runtime with structure,
+  openings, play area, furnishings, decoration and atmosphere components. Shared
+  owners handle batching/model loading, seating, cutaways, phone compatibility,
+  shadow bounds and resource cleanup; the cozy art and layout are retained.
+  Table appearance stays independent. The approved **Use matching table** action
+  in Room Settings explicitly applies a theme's wood/felt recommendation through
+  existing GM/owner settings messages. Cozy recommends Oak and green felt. Theme
+  selection is now shared and saved through the Room style control described above.
+  See `docs/ROOM_THEMES.md` for the authoring contract.
+- Sharpened the cozy rug with a 1024px procedural weave (512px on phones), a finer
+  thread pattern, scaled borders and device-bounded anisotropic filtering. The
+  solid felt slab now casts a full tabletop shadow, preventing tabletop-piece
+  silhouettes from appearing through it on the floor. Refresh clients to apply;
+  no additional server restart is needed for these two follow-up fixes.
+- Polished the table with a softly bevelled satin rim, grain mapped along the rail,
+  and finer world-scaled felt with desktop bump detail. Existing wood/felt choices
+  remain. Rounded corners now share 20 arc segments across rendering, grid clipping
+  and server walls. Cozy furnishings cast desktop shadows; bounded contact shading
+  grounds furniture on all devices while phones retain their shader fallback.
+  Restart the server and refresh clients so the shared corner outline agrees.
+- Added a phone shader fallback for the cozy room after the Pixel 10 Pro still
+  crashed with reduced textures while UI buttons remained usable. Phone scenery
+  keeps base artwork and metal tuning, omits physical layers/detail maps and room
+  shadow reception, and leaves window openings clear without blended panes. Uses
+  the existing device classifier independently of quality preferences. Desktop/tablet
+  material detail remains; GLB/source assets and gameplay rendering are unchanged.
+  The owner confirmed the Pixel 10 Pro crash resolved on October 15, 2026.
+  Refresh the preview; no server restart is needed.
+- Reduced the cozy shelf's embedded texture dimensions to at most 512px, cutting
+  estimated decoded image memory from 80 MB to 18 MB after an Android crash report.
+  Restored full-detail top coins while retaining gameplay metal tuning (metalness 1,
+  roughness 0.3) and matching the shared Gold/Silver palette. Original models/maps
+  remain intact. Texture reduction alone did not resolve the reported Android crash;
+  the phone shader fallback above was subsequently confirmed on the affected device.
+- Stocked the cozy-room shelf with miniature versions of the built-in card decks,
+  coins, poker chips, Go bowls/stones, dominoes and pouch. The dominoes box is half
+  the approved mock-up size. The separate shelf export retains the corrected oak
+  frame, tray and storage baskets; gameplay models and the owner's source stay intact.
+  Refresh `environment=cozy`; no server restart or migration is needed.
+- Cozy-room chairs now follow occupied player seats instead of a fixed six-chair
+  arrangement. Joining, leaving, switching seats and becoming a spectator update
+  just the chairs; empty seats stay clear. Chairs face inward at all eight seat
+  positions and stay outside the shared outline for every table shape. Shared chair
+  resources remain owned by the room across roster changes. Refresh the existing
+  `environment=cozy` preview; no server restart or migration is needed.
+- Added UV-textured rubber plants, snake plants and trailing pothos to the cozy
+  preview: six varied placements on the floor, window sill and bookshelf, sharing
+  model resources and following wall cutaways. Removed the green placeholder picture
+  that overlapped the plaster. The shelf now uses its authored grain-aligned UVs
+  instead of stretched cube UVs, with bounded anisotropic filtering on model maps.
+  The owner's fixed Blender source, corrected geometry and materials are preserved;
+  the shelf UV correction is a separate derivative. Refresh `environment=cozy`;
+  no server restart or migration is needed.
+- Gave the cozy preview UV-textured plaster walls, moulded oak trim, bevelled
+  staggered floorboards and deeper Blender-authored casement frames/sills. Clear
+  glazing now shows the room's selected skybox directly, including panorama/cube
+  tilt and rotation; the painted outdoor inserts are removed. New 512px color,
+  normal and roughness maps retain bounded geometry and owned-resource cleanup.
+  Refresh the existing `environment=cozy` URL; no restart or migration is needed.
+- The cozy preview now uses the owner's corrected Blender chair, game shelf and
+  floor lamp, exported from `cozy_room_assets_fixed.blend` with authored UVs,
+  materials and embedded textures preserved. Chairs share model resources; the
+  shelf follows wall cutaways. Failed model loads retain procedural furnishings,
+  and resize/cleanup releases stale loads and shared resources safely. Refresh an
+  existing `environment=cozy` link; no server restart or migration is needed.
+  See `docs/ART_DIRECTION.md` for the style and export contracts.
+- Added an opt-in cozy game room prototype: append `environment=cozy` to a table
+  URL to surround the existing table with oak flooring, a woven rug, upholstered
+  chairs, table supports, cream walls, daylight windows, a bookcase and a
+  lamp and houseplants. Near walls and their attached furnishings cut away as the camera orbits;
+  overhead views remove all walls. Scenery follows table size/shape and remains
+  viewer-local, unpickable and outside physics, inventory and saves. Refresh to
+  enable/remove the preview; no server restart or migration is needed.
+- Added viewer-local Skybox Tilt (−90° to 90°) and Rotation (−180° to 180°)
+  sliders and degree fields below sky quality in Settings → UI. Adjustments apply
+  live to panoramas and cubemaps, persist on this device, and retain visible labels
+  in compact mode and larger touch targets. Set both fields to 0° to restore the
+  original orientation. Refresh the browser; no server restart or migration is needed.
+- The public website's hero cycles through Chess, Card games, Dice, Go, Dominoes,
+  Mahjong and Wordy every six seconds, with the approved crossfade, game selectors,
+  previous/next and pause/play controls. Manual selection stops playback; hover,
+  keyboard focus and hidden tabs suspend it. Reduced motion starts paused and
+  disables fades. Chess remains readable without JavaScript or if another image
+  fails to load. The four new approved images are staged captures of bundled
+  models rendered by the app, rather than saved multiplayer games. Existing
+  screenshot originals and chess attribution are retained. Publish the updated
+  `website/` directory, including `showcase.js`, then refresh; no game server
+  restart, database migration or dependency change is needed.
+
+### Changed
+- Clarified appearance and dice geometry names: `colorProps` becomes
+  `applyAppearancePatch`, `dieR` becomes `dieGeometrySize`, and `DIE_RADIUS` becomes
+  `DIE_BASE_SIZE`, with production callers, tests and current documentation updated.
+  The library controller's `lib2` variable is now `libraryModal`; DOM IDs/classes,
+  layout, saved props and tuned dice dimensions remain unchanged.
+- Corrected stale library, recoloring, CSP and graphics-default comments; moved
+  serialization, transform-copy, simulation and dice-spawn explanations beside their
+  implementations. Documented persistence privacy, fog-mask bit layout and polygon
+  decomposition stages, and removed obsolete planning references from reviewed comments.
+
+### Fixed
+- Shadow state now persists between animation frames. Stationary scenes reuse the
+  shadow map while movement, visibility changes, piece additions/removals/replacements
+  and late model geometry refresh it. Per-piece comparisons prevent opposing movements
+  cancelling; explicit lighting, quality and context-restoration refreshes still work.
+  Regression tests execute the production frame loop. The user confirmed in-app functionality
+  after these changes; real-device GPU performance remains unmeasured. Restart the server
+  for renamed server imports and refresh clients; no database migration or dependency
+  change is needed.
 
 ## [0.22.0] — 2026-10-14
 
@@ -278,7 +611,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   failures, recovery-code authentication, admission-policy timing, room abuse limits, avatar
   validation and pending-room lifecycle state. Recorded 28 passing related tests and bounded
   synthetic checks, with live/browser verification still pending. No runtime fixes implemented.
-- Added `HARDENING_PLAN.md` as a living record of the landing/account/host-approval review
+- Added `docs/HARDENING_PLAN.md` as a living record of the landing/account/host-approval review
   and proposed session-cookie migration. Separates observed behavior, conditional risks,
   design safeguards and pending verification; linked from architecture and reference docs.
   Documentation only; no security fixes or authentication behavior changes are implemented.
@@ -1948,7 +2281,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...v0.21.0

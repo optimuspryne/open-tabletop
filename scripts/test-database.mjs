@@ -158,6 +158,214 @@ async function prepareDatabase(ownerUrl) {
       await client.query('SET search_path TO public');
       await client.query('DROP SCHEMA demo_upgrade_test CASCADE');
     }
+
+    // Deployed demo databases already have their own 024/025 files. Exercise the
+    // real filename-ledger migrator: matching numeric prefixes must not skip main's
+    // four environment migrations or replay temporary identities onto live guests.
+    const environmentFiles = [
+      '024_room_environment.sql',
+      '025_poker_night.sql',
+      '026_medieval_tavern.sql',
+      '027_modern_bar.sql',
+    ];
+    const deployedFiles = (await fs.readdir(path.join(root, 'postgres')))
+      .filter((file) => /^\d{3,}_.+\.sql$/.test(file) && !environmentFiles.includes(file))
+      .sort();
+    const oldDemoSchema = schema
+      .replace(/^ {2}room_environment[^\n]*\n/m, '')
+      .replace(
+        /INSERT INTO schema_migrations \(version\) VALUES[\s\S]*?;/,
+        `INSERT INTO schema_migrations (version) VALUES ${deployedFiles.map((file) => `('${file}')`).join(', ')};`,
+      );
+    await client.query('CREATE SCHEMA demo_environment_upgrade_test');
+    try {
+      await client.query('SET search_path TO demo_environment_upgrade_test');
+      await client.query(oldDemoSchema);
+      await client.query(
+        "INSERT INTO users(username,email) VALUES ('permanent','permanent@example.test')",
+      );
+      const guest = (
+        await client.query(
+          "INSERT INTO users(username,email,is_demo) VALUES ('guest',NULL,true) RETURNING id",
+        )
+      ).rows[0];
+      const snapshot = { pieces: [{ type: 'die', props: { sides: 6 } }] };
+      const room = (
+        await client.query(
+          "INSERT INTO rooms(owner_id,code,name,notes,scene,table_rim_wood) VALUES ($1,'DEMO-SURVIVOR','Saved demo','keep notes',$2,'walnut') RETURNING id",
+          [guest.id, snapshot],
+        )
+      ).rows[0];
+      await client.query(
+        "INSERT INTO demo_rooms(room_id,invite_hash,starter,expires_at,idle_expires_at,last_occupied_at) VALUES ($1,$2,'dice',clock_timestamp()+interval '2 hours',NULL,clock_timestamp())",
+        [room.id, 'a'.repeat(64)],
+      );
+      await client.query(
+        "INSERT INTO demo_guests(user_id,room_id,display_name) VALUES ($1,$2,'Alex')",
+        [guest.id, room.id],
+      );
+      await client.query(
+        "INSERT INTO user_sessions(user_id,token_hash,expires_at) VALUES ($1,$2,clock_timestamp()+interval '2 hours')",
+        [guest.id, 'b'.repeat(64)],
+      );
+      await client.query(
+        "INSERT INTO room_members(room_id,user_id,role,status) VALUES ($1,$2,'owner','admitted')",
+        [room.id, guest.id],
+      );
+      const before = (await client.query('SELECT * FROM demo_rooms')).rows;
+      const upgradeUrl = new URL(checkedOwnerUrl);
+      upgradeUrl.searchParams.set('options', '-c search_path=demo_environment_upgrade_test');
+      for (let pass = 0; pass < 2; pass++) {
+        await run(
+          process.execPath,
+          [
+            '--input-type=module',
+            '-e',
+            "import {runMigrations} from './migrate.js'; await runMigrations();",
+          ],
+          {
+            env: {
+              MIGRATE_DATABASE_URL: upgradeUrl.toString(),
+              MIGRATE_DATABASE_URL_FILE: '',
+              AUTO_MIGRATE: 'true',
+            },
+          },
+        );
+      }
+      assert.equal(
+        (await client.query('SELECT count(*)::int AS n FROM schema_migrations')).rows[0].n,
+        29,
+      );
+      assert.deepEqual((await client.query('SELECT * FROM demo_rooms')).rows, before);
+      assert.deepEqual(
+        (await client.query('SELECT notes,scene,table_rim_wood,room_environment FROM rooms')).rows,
+        [
+          {
+            notes: 'keep notes',
+            scene: snapshot,
+            table_rim_wood: 'walnut',
+            room_environment: 'standard',
+          },
+        ],
+      );
+      assert.equal(
+        (await client.query('SELECT count(*)::int AS n FROM user_sessions')).rows[0].n,
+        1,
+      );
+      assert.equal(
+        (await client.query('SELECT count(*)::int AS n FROM room_members')).rows[0].n,
+        1,
+      );
+      assert.equal(
+        (await client.query("SELECT email FROM users WHERE username='permanent'")).rows[0].email,
+        'permanent@example.test',
+      );
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query('DROP SCHEMA demo_environment_upgrade_test CASCADE');
+    }
+
+    // Existing rooms migrate to Standard without losing their other settings.
+    const environmentMigration = await fs.readFile(
+      path.join(root, 'postgres/024_room_environment.sql'),
+      'utf8',
+    );
+    await client.query('CREATE SCHEMA environment_upgrade_test');
+    try {
+      await client.query('SET search_path TO environment_upgrade_test');
+      await client.query(
+        'CREATE TABLE rooms (id bigint PRIMARY KEY, notes text, table_rim_wood text)',
+      );
+      await client.query("INSERT INTO rooms VALUES (1, 'legacy notes', 'walnut')");
+      await client.query(environmentMigration);
+      assert.deepEqual((await client.query('SELECT * FROM rooms')).rows, [
+        { id: '1', notes: 'legacy notes', table_rim_wood: 'walnut', room_environment: 'standard' },
+      ]);
+      await client.query("UPDATE rooms SET room_environment = 'cozy'");
+      await client.query(environmentMigration);
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms')).rows[0].room_environment,
+        'cozy',
+      );
+      const pokerMigration = await fs.readFile(
+        path.join(root, 'postgres/025_poker_night.sql'),
+        'utf8',
+      );
+      await client.query("INSERT INTO rooms VALUES (2, 'standard notes', 'oak', 'standard')");
+      await client.query(pokerMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['cozy', 'standard'],
+      );
+      await client.query("UPDATE rooms SET room_environment = 'poker-night' WHERE id = 1");
+      await client.query(pokerMigration);
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms WHERE id = 1')).rows[0]
+          .room_environment,
+        'poker-night',
+      );
+      const tavernMigration = await fs.readFile(
+        path.join(root, 'postgres/026_medieval_tavern.sql'),
+        'utf8',
+      );
+      await client.query(tavernMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['poker-night', 'standard'],
+      );
+      await client.query("UPDATE rooms SET room_environment = 'medieval-tavern' WHERE id = 1");
+      await client.query(tavernMigration);
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms WHERE id = 1')).rows[0]
+          .room_environment,
+        'medieval-tavern',
+      );
+      const modernMigration = await fs.readFile(
+        path.join(root, 'postgres/027_modern_bar.sql'),
+        'utf8',
+      );
+      await client.query(
+        "INSERT INTO rooms VALUES (3, 'cozy notes', 'oak', 'cozy'), (4, 'poker notes', 'walnut', 'poker-night')",
+      );
+      await client.query(modernMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['medieval-tavern', 'standard', 'cozy', 'poker-night'],
+      );
+      await client.query("UPDATE rooms SET room_environment = 'modern-bar' WHERE id = 2");
+      await client.query(modernMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['medieval-tavern', 'modern-bar', 'cozy', 'poker-night'],
+      );
+      assert.deepEqual(
+        (await client.query('SELECT notes, table_rim_wood FROM rooms WHERE id = 2')).rows,
+        [{ notes: 'standard notes', table_rim_wood: 'oak' }],
+      );
+      await client.query(
+        "INSERT INTO rooms (id, notes, table_rim_wood) VALUES (5, 'fresh default', 'oak')",
+      );
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms WHERE id = 5')).rows[0]
+          .room_environment,
+        'standard',
+      );
+      await assert.rejects(
+        client.query("UPDATE rooms SET room_environment = 'unknown'"),
+        (error) => error.code === '23514',
+      );
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query('DROP SCHEMA environment_upgrade_test CASCADE');
+    }
     // Exercise migration 021 independently against an existing account, preserving its avatar.
     const placardMigration = await fs.readFile(
       path.join(root, 'postgres/021_user_placards.sql'),
@@ -321,6 +529,16 @@ try {
   await run(process.execPath, ['--test', 'test/integration/demo-sessions.js'], {
     env: { TEST_DATABASE_URL: appUrl },
   });
+  if (process.argv.includes('--demo')) {
+    await run(process.execPath, ['scripts/demo-room-test.mjs'], {
+      env: { TEST_DATABASE_URL: appUrl, TEST_DATABASE_OWNER_URL: ownerUrl },
+    });
+  }
+  if (process.argv.includes('--multiplayer')) {
+    await run(process.execPath, ['scripts/multiplayer-test.mjs'], {
+      env: { TEST_DATABASE_URL: appUrl, TEST_DATABASE_OWNER_URL: ownerUrl },
+    });
+  }
 } finally {
   await stopDisposablePostgres().catch((error) => {
     console.error(`[test:integration] cleanup failed: ${error.message}`);

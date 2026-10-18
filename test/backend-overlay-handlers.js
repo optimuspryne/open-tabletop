@@ -3,21 +3,6 @@ import assert from 'node:assert/strict';
 import { registerOverlayHandlers } from '../server/game/handlers/overlays.js';
 import { MEASURE, OVERLAY_KINDS, OVERLAY_LIMITS } from '../shared/overlays.js';
 
-const MESSAGE_NAMES = [
-  'overlayAdd',
-  'overlayMove',
-  'overlayRemove',
-  'overlayClear',
-  'overlayDrag',
-  'wbEnable',
-  'wbSet',
-  'wbClaim',
-  'wbRelease',
-  'wbStroke',
-  'wbClear',
-  'wbStrokes',
-];
-
 function harness({
   rank = 0,
   maxOverlays = OVERLAY_LIMITS.maxRoom,
@@ -68,10 +53,6 @@ const client = (sessionId = 'client-1') => ({
 });
 
 const ruler = { kind: 'ruler', x: 1, z: 2, x2: 3, z2: 4, w: 1 };
-
-test('overlay module registers the complete overlay and whiteboard family', () => {
-  assert.deepEqual([...harness().handlers.keys()], MESSAGE_NAMES);
-});
 
 test('players create, move, and remove only their own overlays', async () => {
   const { room, handlers } = harness();

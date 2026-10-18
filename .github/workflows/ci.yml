@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - run: npm run check
@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       # Resolve the browser explicitly and fail if there is none. A skip here would be
@@ -66,13 +66,13 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci --omit=dev --ignore-scripts
       - run: npm run audit
 
   database-integration:
-    name: PostgreSQL integration
+    name: PostgreSQL and multiplayer SDK integration
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -97,7 +97,23 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm run test:integration
+      - run: npm run test:multiplayer
+        timeout-minutes: 10
+
+  production-image:
+    name: Production Alpine image smoke tests (Node 24)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build production image with locked runtime dependencies
+        run: docker build --pull --tag open-tabletop:ci .
+      - name: Exercise schema, room access, privacy and native image processing
+        run: >-
+          docker run --rm open-tabletop:ci node --test
+          test/backend-schema.js test/backend-room-access.js
+          test/piece-visibility.js test/backend-asset-textures.js

@@ -1,8 +1,9 @@
 # Open Tabletop website
 
 The public landing page and wiki live here, separate from the running game app.
-Serve this directory as the web root. It contains ordinary HTML, CSS, and images;
-there are no runtime scripts, framework dependencies, database connections, or build step.
+Serve this directory as the web root. It contains ordinary HTML, CSS, images, and one optional
+local homepage slideshow module. There are no framework dependencies, database connections,
+or deployment build step.
 Do not serve the repository root, which also contains application configuration and secrets.
 
 ## Local preview
@@ -22,7 +23,9 @@ All 18 pages reuse `assets/logo-wordmark.svg`, an unchanged copy of the app logo
 header and footer. The shared `.brand-logo` and `.footer-logo` classes size it for both
 desktop and phone layouts. Header home links and logo images retain accessible names.
 
-- `index.html`: the approved landing page, GitHub link, and live public demo links.
+- `index.html`: the approved landing page, seven-slide showcase, GitHub link, and live public demo links.
+- `showcase.js`: the optional slideshow enhancement; all page content and navigation retain
+  their static fallback. This module runs independently of the game app.
 - `styles.css`: the website's shared tokens, button styles, desktop sidebar, and responsive layout.
   It uses the application's token naming conventions with the approved website palette.
   Game CSS stays separate so either surface can change without affecting the other.
@@ -61,7 +64,7 @@ The public demo links are enabled with user approval and open the demo in the sa
 
 ## Accessibility and device behavior
 
-All content and navigation work without JavaScript. Every page has a skip link, one main
+All page copy, the initial chess image and site navigation work without JavaScript. Every page has a skip link, one main
 heading, a main landmark, and visible keyboard focus. The wiki uses a sidebar above 760px
 and a native expandable contents list at narrower widths. Pointer capability separately
 increases touch link targets. The contents summary works with tap, click, Enter, and Space.
@@ -74,11 +77,12 @@ No gameplay input routing or compact/full app setting changes are involved.
 npm run check
 npm run test:components
 npm run test:devices
+npm run test:input
 npm run test:website
 ```
 
 `test/website.js` is included in the normal test suite. It checks local routes, assets,
-fragment targets, duplicate IDs, page metadata, script-free content, and the active demo destination.
+fragment targets, duplicate IDs, page metadata, the constrained local script, approved slides, and the active demo destination.
 `scripts/website-test.mjs` checks the landing page and welcome, Docker, Portainer, and Assets
 and scenes guides. It reuses `scripts/lib/headless.mjs` to check page overflow, image
 loading, desktop/mobile navigation, and keyboard expansion at 320, 390, 760, 1024, and 1440px.
@@ -93,14 +97,17 @@ device behavior. Installation commands are documentation, not executed by websit
 
 Publish only this directory through a static host. No server rewrites or fallback route are
 needed because links use explicit `.html` files. The website's restrictive meta CSP allows
-only local images and styles; it does not change the game application's CSP. Configure HTTPS
+only local images and styles; the homepage additionally allows its local script. Do not add
+inline scripts, inline styles or remote dependencies. A host response CSP must also allow
+`script-src 'self'` on the homepage for the optional slideshow to run; it does not change the
+game application's CSP. Configure HTTPS
 and any additional response headers in the host. Use the actual game app's origin for
 `PUBLIC_ORIGIN`, not the marketing site's origin.
 
 No publishing configuration or automatic deployment has been added. The project requires
 explicit permission before pushing, including the source push used by Sites publishing.
 
-## Implementation status
+## Initial implementation status (September 29, 2026)
 
 - Layout and text navigation approved in this task, including the plain-language copy revision.
 - Landing page and 17 static wiki pages implemented.
@@ -114,9 +121,10 @@ explicit permission before pushing, including the source push used by Sites publ
 - Local routes, asset references, fragments, and the absence of em dashes were checked.
 - The initial restricted-network check runs were stopped after they ceased progressing.
   The complete check suite passed when rerun with local networking available.
-- User acceptance on the implemented website and physical-device checks remain pending.
+- User acceptance and physical-device checks were pending at that initial revision.
+  The later slideshow and additional images have since received explicit design approval.
 
-## Related repository changes
+## Initial repository changes
 
 - `package.json` adds `test:website`; no dependencies or runtime scripts change.
 - `test/website.js` adds static route, content, and asset checks to the existing test suite.
@@ -135,10 +143,11 @@ points only.
 
 ## Gameplay screenshots
 
-Four original app screenshots and their [capture notes](assets/showcase/README.md) are included
-in the approved layout. The landing hero uses chess, a responsive gallery shows cards and dice,
-and the Assets and scenes guide shows the library. Two dedicated rooms were staged and saved
-through the app. Keep the chess-model attribution when using its screenshot.
+The [capture notes](assets/showcase/README.md) distinguish the four original app screenshots
+from the four approved Go, Dominoes, Mahjong and Wordy renderer mockups. The hero cycles through
+seven images, a responsive gallery shows cards and dice, and the Assets and scenes guide shows
+the library. Two dedicated rooms preserve the older staged content; the new mockups use isolated
+renderer scenes. Keep the chess-model attribution when using its screenshot.
 
 ## Wiki accuracy review
 
@@ -175,3 +184,57 @@ passed all seven profiles. Desktop and phone homepage screenshots were visually
 reviewed. The broader `test:components` run was interrupted with SIGTERM (143)
 during coarse-pointer scenarios, with no failures reported before interruption;
 it is not recorded as a completed pass. Public deployment remains manual.
+
+
+## Approved slideshow integration (October 14, 2026)
+
+The approved carousel uses the existing hero, website tokens and button styles. It has a
+six-second loop and 500ms crossfade, title/caption, counter, seven named selectors and the
+approved Tabler previous, pause/play and next icons. Controls wrap below the selectors on
+narrow screens; selector targets remain at least 24px wide and 44px high. No compact/full game
+UI or gameplay input behavior changes. Native buttons support tap, click, Enter and Space;
+manual changes announce the selected game, while automatic changes stay quiet. Manual
+navigation stops autoplay, hover/focus/hidden tabs suspend it, and reduced motion starts paused
+with no fade. Explicit Play can resume while the button remains focused. Image decoding finishes
+before the visible image changes; a failed image retains the previous screenshot and announces
+an error. With JavaScript disabled, the initial chess image and caption remain and controls hide.
+
+Implementation inventory:
+
+- `index.html`: approved seven-slide metadata and controls, two image layers, local module/CSP
+  and generated four-icon sprite. Static SVG controls reuse the canonical sprite markup.
+- `styles.css`: caption, stable image stage, crossfade, focus-compatible controls and responsive rows.
+- `showcase.js`: new `initShowcase`, with local `schedule` and asynchronous `show` behavior.
+  No game modules or runtime dependencies are imported.
+- `assets/showcase/{go,dominoes,mahjong,wordy}.png`: unchanged approved originals;
+  `assets/showcase/README.md`: capture provenance, placement and validation notes.
+- `../scripts/build-icons.mjs`: reuses `fetchSymbol` and sprite generation with a `--website`
+  subset. Run `npm run build:icons -- --website` after changing website icon names.
+- `../eslint.config.js`: browser globals for the standalone website module.
+- `../test/website.js`: static fallback, local-script and seven-image checks.
+- `../scripts/website-test.mjs`: adds `checkShowcase` and its local `waitFor`/`select` test
+  helpers to exercise the real homepage; existing responsive/navigation checks remain.
+- This README, `../CHANGELOG.md`, `../docs/REFERENCE.md`, `../docs/ARCHITECTURE.md` and
+  `../docs/ASSET_CREDITS.md`: implementation contracts, maintenance and provenance.
+
+This extends the existing website and icon builder. The small website module is a new runtime
+boundary because the separately published directory must not import game code. No game
+functions, server routes, model materials or uploaded assets were changed or removed.
+
+Manual acceptance: refresh the website, cycle through all seven images, use Pause/Play,
+previous/next and the game selectors on desktop and a physical phone. Tab through controls
+and activate with Enter/Space; confirm reduced-motion preference starts paused. No game
+server restart is required. Source push and public deployment remain separate steps.
+
+Slideshow verification completed October 14, 2026:
+
+- `npm run check`: lint, formatting, CSS checks and all 1,030 tests passed.
+- `npm run test:website`: 25 page/profile checks and the production slideshow checks passed,
+  including native keyboard activation and taps at 1024, 390 and 320px. All website assets loaded.
+- `npm run test:components`: desktop and coarse-pointer comparisons, three notecard profiles
+  and three tile-preview profiles passed. The game component fixtures reported 10 missing
+  bundled texture-derivative paths; these are outside the standalone website assets.
+- `npm run test:devices`: all seven profiles passed. `npm run test:input`: 58/58 passed.
+- Final targeted lint/format, documentation links and `git diff --check` passed. The four PNGs
+  match the approved originals byte for byte. Desktop and phone captures of the integrated
+  chess/Go layouts were visually reviewed. Physical-device acceptance remains manual.

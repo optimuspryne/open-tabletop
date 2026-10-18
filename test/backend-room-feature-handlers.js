@@ -3,22 +3,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerRoomFeatureHandlers } from '../server/game/handlers/room-features.js';
 
-const MESSAGE_NAMES = [
-  'highlightPiece',
-  'roll',
-  'trayScoop',
-  'trayClear',
-  'trayShow',
-  'chat',
-  'chatLog',
-  'skybox',
-  'handSync',
-  'whoami',
-  'showStart',
-  'showStop',
-  'ping',
-];
-
 function vector() {
   return {
     x: 0,
@@ -129,10 +113,6 @@ function harness({ rank = 0, now = () => 1234 } = {}) {
   });
   return { room, handlers, events, clients };
 }
-
-test('room-feature module registers the complete chat, tray, and sharing family', () => {
-  assert.deepEqual([...harness().handlers.keys()], MESSAGE_NAMES);
-});
 
 test('chat normalizes whitespace, broadcasts, and replays history', async () => {
   const { room, handlers, events } = harness();

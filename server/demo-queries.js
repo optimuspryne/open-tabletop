@@ -1,4 +1,8 @@
 import crypto from 'node:crypto';
+import {
+  DEFAULT_DEMO_ROOM_ENVIRONMENT,
+  isDemoRoomEnvironment,
+} from '../shared/room-environments.js';
 import { ASSET_TABLES } from './library-queries.js';
 
 export const DEMO_STORAGE_LIMITS = Object.freeze({
@@ -24,6 +28,7 @@ const tableShape = (row) => ({
   code: row.code,
   name: row.name,
   starter: row.starter,
+  environment: row.room_environment,
   expiresAt: row.expires_at,
   idleExpiresAt: row.idle_expires_at,
 });
@@ -49,8 +54,8 @@ const name = (value) => {
   return normalized;
 };
 
-// No routes register this API yet. The future demo HTTP/runtime boundary must
-// enforce IP/rate limits and block non-demo write paths before exposing guests.
+// The demo HTTP/runtime boundary supplies rate limits and guest authorization;
+// storage validates creation settings before allocating any identity or inventory.
 export function createDemoQueries(pool, limits = DEMO_STORAGE_LIMITS) {
   for (const key of Object.keys(DEMO_STORAGE_LIMITS)) {
     if (!Number.isSafeInteger(limits[key]) || limits[key] < 1)
@@ -113,7 +118,7 @@ export function createDemoQueries(pool, limits = DEMO_STORAGE_LIMITS) {
 
   async function findSession(query, sessionHash, lock = false) {
     const { rows } = await query(
-      `SELECT d.*, r.code, r.name, g.user_id, g.display_name, m.role
+      `SELECT d.*, r.code, r.name, r.room_environment, g.user_id, g.display_name, m.role
       FROM user_sessions s JOIN users u ON u.id=s.user_id AND u.is_demo
       JOIN demo_guests g ON g.user_id=u.id JOIN demo_rooms d ON d.room_id=g.room_id
       JOIN rooms r ON r.id=d.room_id
@@ -133,7 +138,13 @@ export function createDemoQueries(pool, limits = DEMO_STORAGE_LIMITS) {
       : null;
   }
 
-  async function createTable({ displayName, sessionHash, inviteHash, starter = 'empty' }) {
+  async function createTable({
+    displayName,
+    sessionHash,
+    inviteHash,
+    starter = 'empty',
+    environment = DEFAULT_DEMO_ROOM_ENVIRONMENT,
+  }) {
     displayName = name(displayName);
     hash(sessionHash);
     hash(inviteHash);
@@ -141,6 +152,8 @@ export function createDemoQueries(pool, limits = DEMO_STORAGE_LIMITS) {
       throw new DemoError('invalid', 'Session and invite credentials must be distinct.');
     if (!['empty', 'dice', 'cards', 'chess'].includes(starter))
       throw new DemoError('invalid', 'Unknown starter table.');
+    if (!isDemoRoomEnvironment(environment))
+      throw new DemoError('invalid', 'Unknown demo room style.');
     return transaction(async (client) => {
       await checkCapacity(client);
       const times = (
@@ -154,9 +167,14 @@ export function createDemoQueries(pool, limits = DEMO_STORAGE_LIMITS) {
       const userId = await insertGuest(client, displayName, sessionHash, times.expiry);
       const room = (
         await client.query(
-          `INSERT INTO rooms(owner_id,code,name,require_approval)
-        VALUES ($1,$2,$3,true) RETURNING id,code,name`,
-          [userId, crypto.randomBytes(16).toString('hex').toUpperCase(), `${displayName}'s table`],
+          `INSERT INTO rooms(owner_id,code,name,require_approval,room_environment)
+        VALUES ($1,$2,$3,true,$4) RETURNING id,code,name,room_environment`,
+          [
+            userId,
+            crypto.randomBytes(16).toString('hex').toUpperCase(),
+            `${displayName}'s table`,
+            environment,
+          ],
         )
       ).rows[0];
       const demo = (
@@ -183,7 +201,7 @@ export function createDemoQueries(pool, limits = DEMO_STORAGE_LIMITS) {
       throw new DemoError('invalid', 'Session and invite credentials must be distinct.');
     return transaction(async (client) => {
       const { rows } = await client.query(
-        `SELECT d.*, r.code, r.name FROM demo_rooms d
+        `SELECT d.*, r.code, r.name, r.room_environment FROM demo_rooms d
         JOIN rooms r ON r.id=d.room_id WHERE d.invite_hash=$1 AND ${live} FOR UPDATE OF d,r`,
         [inviteHash],
       );

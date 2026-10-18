@@ -6,23 +6,6 @@ import {
   scheduleRoomSave,
 } from '../server/game/handlers/room-state.js';
 
-const MESSAGE_NAMES = [
-  'stateSave',
-  'notebook',
-  'notebookSync',
-  'timer',
-  'score',
-  'roomNotes',
-  'table',
-  'tableColor',
-  'lightingApply',
-  'lightingRestore',
-  'lightingDefaultSave',
-  'lightingFactoryReset',
-  'scaleSet',
-  'calibrateGrid',
-];
-
 function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}) {
   const handlers = new Map();
   const events = [];
@@ -61,6 +44,7 @@ function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}
       rimWood: 'mahogany',
       feltColor: '#006633',
       skybox: '',
+      environment: 'standard',
       scale: { gridStyle: 'off', cellWorld: 0 },
       lighting: {
         preset: 'neutral',
@@ -143,10 +127,6 @@ test('GMs apply and restore lighting while only owners can replace the room defa
   assert.deepEqual(owner.room.state.lighting, owner.room.factoryLighting);
 });
 
-test('room-state module registers the complete settings and persistence family', () => {
-  assert.deepEqual([...harness().handlers.keys()], MESSAGE_NAMES);
-});
-
 test('helpers can update scores but cannot mutate GM-only room settings', async () => {
   const { room, handlers, events } = harness({ rank: 1 });
   const user = client();
@@ -199,6 +179,7 @@ test('durable room serialization includes settings, score rows, scene, and scale
   const { room } = harness();
   room.savedScene = { pieces: [{ type: 'die' }] };
   room.state.notes = 'notes';
+  room.state.environment = 'cozy';
   room.state.scores.set('s1', { label: 'Heroes', score: 7 });
   const calls = [];
   await saveRoomStateNow(room, {
@@ -223,6 +204,7 @@ test('durable room serialization includes settings, score rows, scene, and scale
         scene: room.savedScene,
         scale: { gridStyle: 'off', cellWorld: 0 },
         lighting: room.defaultLighting,
+        environment: 'cozy',
       },
     ],
   ]);
@@ -295,19 +277,23 @@ test('room writes capture snapshots and serialize completion across failures', a
     },
   };
   room.savedScene = { pieces: [{ props: { front: 'first' } }] };
+  room.state.environment = 'cozy';
   const first = saveRoomStateNow(room, { db });
   const failure = assert.rejects(first, /failed write/);
   await Promise.resolve();
   room.savedScene.pieces[0].props.front = 'second';
+  room.state.environment = 'standard';
   const second = saveRoomStateNow(room, { db });
   await Promise.resolve();
   assert.equal(writes.length, 1);
   assert.equal(writes[0].scene.pieces[0].props.front, 'first');
+  assert.equal(writes[0].environment, 'cozy');
   gates[0].reject(new Error('failed write'));
   await failure;
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(writes.length, 2);
   assert.equal(writes[1].scene.pieces[0].props.front, 'second');
+  assert.equal(writes[1].environment, 'standard');
   gates[1].resolve();
   await second;
 });
@@ -342,4 +328,47 @@ test('a completed save does not send privileged acknowledgment after participati
     actor.sent.some(({ type }) => type === 'stateSaved'),
     false,
   );
+});
+
+test('only GMs and owners can change the room environment without changing table or scene', async () => {
+  for (const [rank, environment] of [0, 1, 2, 3].flatMap((rank) =>
+    ['cozy', 'poker-night', 'medieval-tavern', 'modern-bar'].map((environment) => [
+      rank,
+      environment,
+    ]),
+  )) {
+    const { room, handlers, events } = harness({ rank });
+    const original = structuredClone(room.state);
+    room.savedScene = { pieces: [{ type: 'die' }] };
+    const scene = room.savedScene;
+    await handlers.get('roomEnvironment')(client(), { environment });
+    assert.equal(room.state.environment, rank >= 2 ? environment : 'standard');
+    assert.deepEqual({ ...room.state, environment: original.environment }, original);
+    assert.equal(room.savedScene, scene);
+    assert.equal(events.length, rank >= 2 ? 1 : 0);
+    await handlers.get('roomEnvironment')(client(), { environment });
+    assert.equal(events.length, rank >= 2 ? 1 : 0, 'Repeated state must not schedule another save');
+    await handlers.get('roomEnvironment')(client(), { environment: 'standard' });
+    assert.equal(room.state.environment, 'standard');
+  }
+});
+
+test('room environment rejects malformed and unknown styles before mutation or persistence', async () => {
+  const { room, handlers, events } = harness();
+  for (const message of [
+    null,
+    [],
+    'cozy',
+    {},
+    { environment: null },
+    { environment: {} },
+    { environment: 'constructor' },
+    { environment: '/custom.glb' },
+    { environment: 'Cozy' },
+    { environment: 'cozy', extra: true },
+  ]) {
+    await handlers.get('roomEnvironment')(client(), message);
+    assert.equal(room.state.environment, 'standard');
+  }
+  assert.deepEqual(events, []);
 });

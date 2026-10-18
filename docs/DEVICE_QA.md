@@ -49,6 +49,104 @@ per-device/browser matrix; the checklist below remains reusable for future runs.
   expect 17/18 two-high stacks per side, two Rounded Pips dice at the center, no pouch
   and empty hands. On a small table, the error must leave the previous setup intact.
 
+### Cozy room prototype
+
+- [ ] Lossless shelf adoption: refresh clients, cold-load Cozy on the Pixel 10 Pro
+  (Chrome/Brave) and desktop. Confirm cards, coin colors/relief, oak grain and Go
+  bowls match the retained original. Check first-load responsiveness: the CSP-safe
+  JavaScript Meshopt decoder runs on the main thread. Verify only
+  `cozy-game-shelf-lossless.glb` loads during normal room entry, with no request for
+  the backup `cozy-game-shelf.glb` and no CSP errors. Switch Standard/Cozy, resize,
+  rejoin and background/resume; no stale meshes or resource growth should appear.
+- [ ] In Settings → Credits → Libraries, verify the meshoptimizer — MIT link is
+  readable and keyboard/touch reachable in full/compact desktop and phone layouts.
+
+- [ ] After migration 024, server restart and browser refresh, select **Room Settings
+  → Table Size & Color → Room style → Cozy game room** as GM/owner. Verify native
+  mouse/keyboard/touch operation and visible labels/hint in full/compact desktop,
+  phone and tablet layouts. Switch to Standard and back repeatedly; no stale room,
+  shadow bounds, chairs or model callbacks should remain.
+- [ ] With two clients in one room, change style in either GM/owner view; both must
+  agree. Reload/rejoin both and restart the server; the choice must persist. A
+  different room keeps its own style. Old preview URLs must follow saved state.
+  Helper/player, timed-out or demoted clients cannot change it. Load a scene and
+  reset the game; the room style must remain. Wood, felt, size and lighting stay
+  independent; “Use matching table” follows the active room.
+- [ ] Visit every seat and orbit/pan/zoom with mouse, keyboard and touch. Near walls
+  and their bookcases/windows must cut away; top-down views must remain unobstructed.
+- [ ] Confirm the fixed upholstered chairs face the table, the shelf preserves corrected
+  frame/tray/basket placement, and the linen lamp retains its texture. Throttle/block
+  a furniture GLB: the room should finish loading with its procedural fallback.
+
+Reported result: the initial 512px shelf-map mitigation did **not** resolve the
+Pixel 10 Pro crash. The room appears briefly, then a white area with a frowny icon
+replaces the rendering while UI buttons still respond. The exact cause is unconfirmed.
+On October 15, 2026, the owner confirmed that the phone shader fallback fixed the
+reported crash on the Pixel 10 Pro. Browser-specific coverage and the extended
+smoke checks below were not specified and remain unchecked.
+
+- [ ] Approved table/shadow finish: after restarting the server and refreshing,
+  compare all five table shapes at small/large sizes. Rounded corners, rim holes,
+  bevels, grid edges and collisions must align. Swap every wood and felt color;
+  grain should follow the rail without seams/cracks or stretched caps. Inspect
+  fine felt up close while retaining readability at normal play distance.
+- [ ] Desktop/tablet: furniture, lamp and plant shadows must reach the floor/walls;
+  change lighting direction and resize/orbit to check shadow coverage and cutaways.
+  Shadow quality/off controls must retain their existing effect. Check GPU cost
+  while moving game objects, when shadow maps update frequently.
+- [ ] Room framework: compare the cozy preview with its prior layout at every
+  occupied seat/shape and after resize/rejoin. Keep a custom rim/felt while loading
+  the theme; neither should change automatically. In full/compact desktop/touch
+  settings, **Use matching table** must remain readable and keyboard/touch usable,
+  applying only Oak/green felt for GMs/owners. Shape, size and lighting must remain.
+  The matching row must be absent with no theme; a demoted role cannot apply it.
+- [ ] Pixel 10 Pro: repeat the previously successful shader-fallback smoke check.
+  Furniture gets contact shading only; felt has no bump map and scenery has no
+  shadow-map passes. Join/leave seats, background/resume and resize repeatedly;
+  contacts must follow owners without orphaned planes or accumulating resources.
+- [ ] Android shader follow-up: reload on the Pixel 10 Pro in Chrome and Brave,
+  inspect/orbit the shelf, resize/rejoin and background/resume repeatedly. Base
+  artwork, card cutouts, metal colors and clear sky openings must remain; phone
+  surface relief/layered gloss and scenery shadow reception are intentionally reduced.
+  Verify desktop/tablet detail and gameplay materials retain their existing behavior.
+- [ ] Android crash follow-up: cold-load the cozy preview in Chrome and Brave,
+  inspect/orbit the shelf and resize/rejoin repeatedly. Record phone/browser versions
+  and whether a freeze, black canvas or crash screen recurs. If it does, capture
+  remote browser/GPU/context-loss logs before attributing a cause. The shelf now
+  caps embedded maps at 512px; that change alone did not resolve the Pixel crash.
+- [ ] Inspect the stocked shelf: blue/red card backs and display ace, coin/chip stacks,
+  two Go bowls with stones, loose tray stones, half-size dominoes box, three upright
+  dominoes and pouch. Orbit past the east wall: all shelf contents must cut away
+  together and remain outside object picking. Check download/GPU cost on real devices.
+- [ ] With multiple clients, join/leave, change seats and switch to/from spectator:
+  exactly one chair should follow each occupied player seat, with empty seats clear.
+  Check inward-facing cushions/backrests at all eight seats, especially the chair by
+  the shelf, across table shapes/resizes. Block/delay the chair GLB while changing
+  seats; completion must use the current roster. Check zero-player/spectator-only rooms.
+- [ ] Check all six plants: rubber plants at opposite floor corners, snake plants beside
+  opposing walls, and pothos on one sill and the bookshelf. Pots must sit on their
+  supports, leaves must clear chairs/table, and wall-supported plants must cut away.
+  Confirm the west wall has no green patch and the shelf grain stays clear up close.
+- [ ] Confirm plaster/board grain stays at a consistent scale when resizing, seams
+  remain staggered and trim/sills clear the walls. Windows must show the selected
+  skybox and respond live to panorama/cube tilt/rotation and Sky Off. Frame load
+  failure must leave clear openings. Check glazing/normal-map cost on real devices.
+- [ ] Try small/large and round/oval/hex tables, resizing during play and visiting
+  personal dice trays. Scenery must stay outside picking, physics and saved state.
+- [ ] Switch lighting and sky quality, including Sky Off. Check readability, frame
+  rate and memory on real devices; verify another viewer without the parameter has
+  the normal surroundings. Real-device GPU performance is not established by browser fixtures.
+
+### Sky orientation
+
+- [ ] On desktop, phone and tablet in full/compact mode, open Settings → UI → Skybox.
+  Drag Tilt/Rotation, focus sliders and use arrows, and enter exact degrees; labels,
+  focus rings and values must remain visible. Touch adjustment must not move the table.
+- [ ] Try a cloudy panorama and a six-face cubemap, orbit/pan/zoom the camera, and
+  confirm the sky follows orientation without parallax or covering tabletop objects.
+- [ ] Refresh, switch sky, and toggle Off/on; angles should persist locally.
+  Another client keeps its own angles. Set both fields to zero to restore the original sky.
+
 ### Drawable notecards
 The user accepted the freehand editor and approved the zoom/pan, private-hand and compact-icon
 additions for commit. Automated coverage is recorded in [the design notes](DESIGN_notecards.md).
@@ -493,3 +591,32 @@ device/browser matrix was reported; the detailed checks below remain reusable.
 
 Restart the server and refresh browsers before testing custom ink. Native color picker appearance
 and keyboard controls vary by browser/OS; automation does not establish real-device usability.
+
+### Canonical lossless models — October 15, 2026
+
+The app ships one compressed GLB per existing canonical filename. Duplicate
+original payloads and temporary derivative paths were removed after the owner
+compared them. Authoring sources stay outside the app. The manifest pins decoded
+buffer/image fingerprints and browser metadata baselines; the offline publisher
+performs original/candidate comparison before updating those baselines.
+
+Manual: refresh/cold-load on Pixel 10 Pro Chrome/Brave; enter Cozy, join/resize,
+switch to Standard; spawn/recolor chess, chips/coins, Go board/bowls, dice and
+Dominoes; inspect shelf/plants/windows and corresponding previews. Confirm
+material/tint slots, responsiveness and no black canvas. Open an ordinary custom
+GLB in the collider editor. Compression does not lower decoded GPU memory.
+No server restart is needed for this asset-only change. The owner's comparison
+approved visual equivalence; current-file cold loading still remains a manual
+check and is not inferred from browser emulation.
+
+The single-asset publishing command is tested with the coin and animated Go bowl,
+including exact source/candidate browser pixels, materials, hierarchy, animation
+and GPU rendering in both profiles. Final unit/browser/component outcomes are
+recorded in `ART_DIRECTION.md`. The earlier unrelated notecard wheel-zoom failure
+remains historical context; no input behavior changed in this cleanup.
+
+Final cleanup checks: `npm run check` passed 1,176 tests; all 101 canonical models
+passed desktop/touch GPU/metadata verification; six focused production room and
+tile-appearance cases and tile previews at 1280/390/320px passed. Collider
+measurement reads all compressed registered models successfully. Full component
+and responsive suites were not repeated for this asset-only cleanup.

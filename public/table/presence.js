@@ -11,17 +11,18 @@ const FAN = { scale: 0.8, step: 0.55, yaw: 0.06, gap: 0.05, maxWidth: 6.6, arc: 
 //   lookFwd / lookH : the point a seat looks at (from table centre, in its direction).
 //   dist / rise     : how far the camera sits back / up from that point (their ratio = the angle).
 //   zoom            : <1 dollies in, >1 pulls back — scales the offset, so the ANGLE is unchanged.
-// Table sits lower in frame → raise lookH and rise together.
-// Default player-seat framing: close enough for the near rail and hand to anchor the view while
-// retaining the whole play surface, matching the natural seated composition players orbit toward.
-const VIEW = { lookFwd: 2, lookH: 4, dist: 15.4, rise: 10, zoom: 0.65 };
+// maximumHeight caps the vertical scale after the horizontal table fit.
+// Approved seated framing: a shallow view with the room ceiling above the play surface.
+// Bound eye height independently of table size so large-table seats remain below the eaves.
+const VIEW = { lookFwd: 2, lookH: 1.5, dist: 15.4, rise: 5, zoom: 0.65, maximumHeight: 8 };
 export function seatLayoutFor(hx, hz) {
   const m = 0.8; // hand inset from the edge
   const cx = hx * 0.66,
     cz = hz * 0.69; // diagonal (corner) seat positions
+  // Horizontal fit follows table size; eye height has a separate upper bound.
   const sx = hx / 10,
     sz = hz / 7,
-    sy = (sx + sz) / 2; // camera scale vs the default 20x14 table
+    sy = Math.min((sx + sz) / 2, VIEW.maximumHeight / (VIEW.lookH + VIEW.rise * VIEW.zoom));
   const cam = (p, t) => ({
     pos: [p[0] * sx, p[1] * sy, p[2] * sz],
     target: [t[0] * sx, t[1] * sy, t[2] * sz],

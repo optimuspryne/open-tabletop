@@ -623,3 +623,16 @@ test('ordinary scene restore retains support for more than fifteen dice', () => 
   );
   assert.equal(room.state.pieces.size, 16);
 });
+
+test('portable scenes and game resets preserve the destination room environment', () => {
+  const source = serializationRoom();
+  source.state.environment = 'cozy';
+  assert.equal(Object.hasOwn(serializeScene(source, { geoOf }), 'environment'), false);
+  assert.equal(Object.hasOwn(serializeGame(source, { geoOf }), 'environment'), false);
+  const { room } = restorationRoom();
+  room.state.environment = 'cozy';
+  applyScene(room, { pieces: [], environment: 'standard' }, restoreOptions);
+  assert.equal(room.state.environment, 'cozy');
+  clearGameTable(room);
+  assert.equal(room.state.environment, 'cozy');
+});

@@ -201,6 +201,39 @@ test('seat layout scales all eight cameras and keeps hand positions inside table
   }
 });
 
+test('seated cameras use the approved shallow view and cap eye height on large tables', () => {
+  for (const [hx, hz] of [
+    [10, 7],
+    [40, 28],
+    [80, 14],
+    [20, 40],
+  ]) {
+    for (const { cam, hand } of seatLayoutFor(hx, hz)) {
+      const position = new THREE.Vector3(...cam.pos),
+        target = new THREE.Vector3(...cam.target);
+      assert.ok(position.y > target.y && target.y > 0);
+      assert.ok(
+        position.y <= 8,
+        'Large tables must not lift the default camera above the roof eaves',
+      );
+      assert.ok(Math.abs(hand[0]) < hx && Math.abs(hand[2]) < hz);
+      if (hx === 10 && hz === 7) {
+        const angle =
+          (Math.atan2(
+            position.y - target.y,
+            Math.hypot(position.x - target.x, position.z - target.z),
+          ) *
+            180) /
+          Math.PI;
+        assert.ok(
+          angle > 15 && angle < 20,
+          'Baseline composition should stay near the approved seated angle',
+        );
+      }
+    }
+  }
+});
+
 test('late hydration creates the local fan and YOU chip, applies role and signals camera readiness', () => {
   const f = fixture();
   assert.equal(f.scene.children.length, 0);

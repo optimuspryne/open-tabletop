@@ -106,12 +106,12 @@
         <p>
           It reuses the Proxmox native installer for releases, separate database roles, credentials,
           upload storage, backups, and the non-root systemd service. Debian/Ubuntu use NodeSource
-          Node.js 26, the distro’s PostgreSQL package, and Redis. Fedora/Arch use their Node.js/npm,
+          Node.js 24, the distro’s PostgreSQL package, and Redis. Fedora/Arch use their Node.js/npm,
           PostgreSQL, and Valkey packages (<a
             href="https://packages.fedoraproject.org/pkgs/valkey/valkey/"
             >Fedora package</a
           >, <a href="https://archlinux.org/packages/extra/x86_64/valkey/">Arch package</a>);
-          Node.js 22.12 or newer is required. Arch installation runs a full
+          Node.js 24 or newer is required. Arch installation runs a full
           <code>pacman -Syu --needed --noconfirm</code> to avoid partial upgrades. Install
           <code>git</code> first for repository fetches (<code>apt install git</code>,
           <code>dnf install git</code>, or <code>pacman -Syu git</code> as appropriate).

@@ -7,19 +7,20 @@ machine you happen to be testing on. GESTURES.md is the ledger of _what a finger
 this file is the ledger of _which layout each device gets_, and `scripts/device-matrix.mjs`
 is the test that holds the code to it.
 
-Read this with `public/styles.css` and `public/client.js`. Two media queries decide almost
-everything about the chrome, and they are deliberately **not** the same query:
+Read this with `public/styles.css`, `public/ui/ui-surfaces.js` and
+`public/table/table-shell.js`. The media queries decide almost everything about the chrome,
+and they are deliberately **not** the same query:
 
-- **`SHEET_MQ` = `(max-width: 900px), (pointer: coarse)`** (`client.js:5299`, kept in step
-  with the `.region, .sheet` rule at `styles.css:267`). When it matches, corner regions and
+- **`SHEET_MQ` = `(max-width: 900px), (pointer: coarse)`** (`ui-surfaces.js`, kept in step
+  with the `.region, .sheet` rule in `styles.css`). When it matches, corner regions and
   menus become bottom **sheets** — full-width, bottom-anchored, rounded top corners. When it
   does not, they are floating desktop panels. The bound is wider than a phone and includes
   _any_ coarse pointer, so tablets and touch laptops get the touch layout rather than a
   desktop overlay they cannot place precisely.
-- **`(pointer: fine)`** (`client.js:229`) gates the **movable/dockable** panels — the
+- **`(pointer: fine)`** (`table-shell.js`) gates the **movable/dockable** panel capability — the
   drag-to-float behaviour is desktop-only. A coarse pointer keeps the docked layout regardless
   of width.
-- **`(max-width: 560px)`** (`styles.css:2060`) swaps the topbar **wordmark** (`.brandFull`)
+- **`(max-width: 560px)`** (`styles.css`) swaps the topbar **wordmark** (`.brandFull`)
   for the compact **mark** (`.brandMark`).
 
 The important thing the matrix guards is that these are **three independent switches on two
@@ -30,6 +31,14 @@ gating sheets on width alone) passes every phone test and breaks every tablet. S
 is chosen to put each switch in both states independently of the others.
 
 ## Profiles
+
+Approved seated framing is shared across fine/coarse and full/compact modes:
+join/seat changes/My Seat use the lower view with capped eye height on large tables.
+Cozy's physical table is about 74cm above its floor. Birds Eye still fits the table
+from viewport aspect; existing orbit/pan/pinch routes and layout branches are unchanged.
+Desktop/390px production-module captures verify the approved composition; the
+seven-profile device suite checks layout consistency. Real-device camera feel remains
+manual QA, including portrait phone zoom/pan and returning to My Seat.
 
 `sheet` = `SHEET_MQ` matches (bottom-sheet chrome). `fine` = `(pointer: fine)` matches
 (movable panels). `mark` = compact logo (`≤ 560px`). `touch` = the profile is rendered with
@@ -54,13 +63,14 @@ narrow-desktop corners where the two queries disagree.
 `scripts/device-matrix.mjs` renders each profile against the real `public/` (no server, no
 room needed — the layout switches are pure CSS + `matchMedia`) and checks:
 
-1. **Sheet branch.** `matchMedia(SHEET_MQ).matches` equals the table's `sheet` column, **and**
-   a real `.sheet` element actually got the bottom-sheet CSS (rounded top corners, bottom
-   anchor). Asserting both catches the failure the `styles.css` comment warns about by name:
-   `SHEET_MQ` in `client.js` and the media query in `styles.css` drifting out of step, so the
-   JS thinks it is a sheet while the CSS lays it out as a panel or vice-versa.
+1. **Sheet branch.** The production `createUiSurfaces().isSheet()` equals the table's `sheet`
+   column, **and** a real `.region` element gets full-width sheet CSS with square bottom
+   corners. The test imports the production module rather than copying its media query.
+   Asserting both catches `SHEET_MQ` in `ui-surfaces.js` and the media query in `styles.css`
+   drifting out of step, so the JS thinks it is a sheet while the CSS lays it out as a panel
+   or vice-versa.
 2. **Movable-panel branch.** `matchMedia('(pointer: fine)').matches` equals the `fine` column
-   — the switch that decides whether panels can be dragged out to float (`client.js:229`).
+   — the capability used by `table-shell.js` when movable panels are configured.
 3. **Logo.** Exactly one of `.brandFull` / `.brandMark` is displayed, matching the `mark`
    column (`≤ 560px`).
 4. **Modal reachability.** With the Add-to-Library modal revealed, its close (`✕`) button sits

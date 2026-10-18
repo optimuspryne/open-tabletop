@@ -47,6 +47,8 @@ test('atomic guest allocation uses existing sessions/memberships and preserves h
   assert.equal(user.demoRoomId, table.roomId);
   assert.equal((await db.getMembership(table.roomId, user.id)).role, 'owner');
   assert.equal((await db.demo.resume(hostKeys.sessionHash)).roomId, table.roomId);
+  assert.equal(table.environment, 'cozy');
+  assert.equal((await db.getRoomState(table.roomId)).environment, 'cozy');
   assert.equal(table.inviteHash, undefined);
   assert.equal(table.sessionHash, undefined);
   const stored = (await pool.query('SELECT * FROM demo_rooms WHERE room_id=$1', [table.roomId]))
@@ -270,4 +272,29 @@ test('restart occupancy recovery uses the durable heartbeat and cannot extend an
   await db.demo.recoverOccupancy();
   assert.equal(await db.demo.resume(keys.sessionHash), null);
   assert.equal(await db.demo.setOccupied(table.roomId, true), false);
+});
+
+test('all four demo room styles persist independently of starters through invites and resume', async () => {
+  for (const [environment, starter] of [
+    ['cozy', 'empty'],
+    ['poker-night', 'dice'],
+    ['medieval-tavern', 'cards'],
+    ['modern-bar', 'chess'],
+  ]) {
+    const host = credentials();
+    const table = await db.demo.createTable({ ...host, environment, starter });
+    assert.equal(table.environment, environment);
+    assert.equal(table.starter, starter);
+    assert.equal((await db.getRoomState(table.roomId)).environment, environment);
+    const joined = await db.demo.joinInvite({
+      ...credentials(),
+      inviteHash: host.inviteHash,
+      environment: 'cozy',
+    });
+    assert.equal(joined.environment, environment, 'invites inherit the host room');
+    assert.equal((await db.demo.resume(host.sessionHash)).environment, environment);
+    await db.demo.setOccupied(table.roomId, true);
+    await db.demo.recoverOccupancy();
+    assert.equal((await db.getRoomState(table.roomId)).environment, environment);
+  }
 });

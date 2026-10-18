@@ -10,7 +10,7 @@ import {
   trayCollisionParts,
   trayPlace,
   inTray,
-  dieR,
+  dieGeometrySize,
   SEAT_ANGLES,
   seatAngle,
 } from '../shared/pieces.js';
@@ -116,7 +116,7 @@ test('physics: a die dropped into the walled tray stays contained', () => {
     b.quaternion.copy(spin);
     world.addBody(b);
   }
-  const r = dieR(6); // a d6-sized cube die
+  const r = dieGeometrySize(6); // a d6-sized cube die
   const die = new CANNON.Body({ mass: 1 });
   die.addShape(new CANNON.Box(new CANNON.Vec3(r, r, r)));
   const start = trayPlace({ x: 0.4, y: 1.6, z: -0.3 }, center, angle);
@@ -152,7 +152,7 @@ test('physics: a "Roll all" of several tray dice keeps them all in the tray', ()
     world.addBody(b);
   }
   const R = { up: 8, spread: 13, spin: 30 }; // SIM.trayRoll
-  const r = dieR(20),
+  const r = dieGeometrySize(20),
     dice = [];
   for (let i = 0; i < 5; i++) {
     // a handful of d20-sized dice
@@ -195,7 +195,7 @@ test("personal trays: two seats' dice each stay in their OWN tray", () => {
   const a = buildSeatTray(world, 2, tableX, tableZ); // right seat (+X)
   const b = buildSeatTray(world, 4, tableX, tableZ); // front-right seat
   const R = { up: 8, spread: 13, spin: 30 };
-  const r = dieR(20);
+  const r = dieGeometrySize(20);
   const make = (frame, i) => {
     const d = new CANNON.Body({ mass: 1 });
     d.addShape(new CANNON.Box(new CANNON.Vec3(r, r, r)));

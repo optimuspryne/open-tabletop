@@ -36,6 +36,7 @@ import {
   PLAYING_CARD_JOKERS,
 } from '../shared/playing-cards.js';
 import { assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
+import { LEGACY_MAHJONG_FACE_URLS } from '../shared/tile-models.js';
 import { launch, newPage, serveDir, snapshotExpression } from './lib/headless.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', 'public');
@@ -228,7 +229,7 @@ const SCENES = [
     drive: `
       const assert = (ok, message) => { if (!ok) throw Error(message); };
       const THREE = await import('three');
-      const { KIND, cardMesh, tilePreviewURL } = await import('/rendering/graphics.js');
+      const { KIND, cardMesh, cardPreviewURL, tilePreviewURL } = await import('/rendering/graphics.js');
       const { CONFIG, deviceClass } = await import('/rendering/core.js');
       const { cardGeom } = await import('/shared/pieces.js');
       const { createInspection } = await import('/table/inspection.js');
@@ -342,8 +343,10 @@ const SCENES = [
       const preview=await tilePreviewURL(mjProps);
       assert(preview?.startsWith('data:image/'),'Mahjong hand preview missing');
       for(const id of ['flowPlum','flowBamboo']) {
-        const image=new Image();image.src='/mahjong/faces/'+id+'.png';await image.decode();
-        assert(image.naturalWidth===360&&image.naturalHeight===480,'New flower image fallback is missing');
+        const ref='/mahjong/faces/'+id+'.png';
+        const image=new Image();image.src=cardPreviewURL(ref);await image.decode();
+        assert(image.src.startsWith('data:image/')&&image.naturalWidth<=320&&image.naturalHeight<=320,
+          'Flower fallback must be generated without a retired PNG');
       }
       KIND.card.dispose(painted);KIND.card.dispose(mesh);
       piece.props=JSON.stringify(mjProps);meshes.set('1',{type:'card',mesh:original});
@@ -750,7 +753,10 @@ const SCENES = [
         for (const box of list.querySelectorAll('.libPreview')) {
           box.scrollIntoView({block:'center'});
           await waitFor(()=>box.querySelector('img')?.hasAttribute('src'));
-          assert(box.querySelector('img').src.endsWith('.png.webp?quality=thumbnail'), kind+' loaded a raw original');
+          const image=box.querySelector('img');
+          assert(image.src.endsWith('.png.webp?quality=thumbnail'), kind+' loaded a raw original');
+          await image.decode();
+          assert(image.naturalWidth===320&&image.naturalHeight===160,kind+' thumbnail did not load its bounded fixture');
         }
       }
       const {createDicePreferences} = await import('/table/dice-preferences.js');
@@ -1282,6 +1288,7 @@ const SCENES = [
   },
   {
     name: 'client-bootstrap',
+    page: '/table.html?environment=cozy',
     root: '#controlsModal',
     expect: { selector: '#controlsModal:not([hidden])', min: 1 },
     drive: `
@@ -1295,10 +1302,11 @@ const SCENES = [
         overlays: new Map(), trays: new Map(), scores: new Map(), unclaimed: new Map(),
         scale: { gridStyle: 'off', worldPerUnit: 1, unitLabel: 'ft', roundStep: 1, cellWorld: 1 },
         whiteboard: { enabled: false }, timer: { running: false, mode: 'up', base: 0, since: 0 },
+        environment: ['cozy','poker-night','medieval-tavern','modern-bar'].includes(new URLSearchParams(location.search).get('fixtureEnvironment'))?new URLSearchParams(location.search).get('fixtureEnvironment'):'standard',
         tableX: 40, tableZ: 28, tableShape: 'rectangle', roomName: 'Fixture table', skybox: '',
       };
       const room = { state: { ...state, pieces: undefined }, sessionId: 'me', reconnectionToken: 'fixture',
-        onMessage: (key, fn) => messages.set(key, fn), onStateChange(fn) { patches.push(fn); }, onLeave() {},
+        onMessage: (key, fn) => messages.set(key, fn), onStateChange(fn) { patches.push(fn); }, onLeave() {}, onReconnect() {},
         send: (...args) => sent.push(args), leave() {}, };
       const callbacks = (object) => new Proxy({ listen() {} }, {
         get: (target, key) => target[key] || {
@@ -1312,6 +1320,13 @@ const SCENES = [
         },
         getStateCallbacks: () => callbacks,
       };
+      const policyViolations=[];
+      if(state.environment==='cozy'){
+        document.addEventListener('securitypolicyviolation',event=>policyViolations.push(event.violatedDirective));
+        const policy=document.createElement('meta');policy.httpEquiv='Content-Security-Policy';
+        policy.content="default-src 'self'; script-src 'self' 'sha256-nAG3xy0rRET2ecuPDHRx6qjQE+p+98x1xfv8G0NqT2c='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss: data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'";
+        document.head.append(policy);
+      }
       await import('/__client-live.js');
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       byId('controlsBtn').click();
@@ -1323,6 +1338,413 @@ const SCENES = [
       patches.forEach(fn => fn(room.state));
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       assert(byId('sfxVol')?.oninput, 'Joined client did not finish binding controls');
+      const { scene: clientScene, camera: clientCamera, controls: clientControls, renderer: clientRenderer, waitForVisualAssets, deviceClass: clientDeviceClass, tableMesh: clientTableMesh, rimMat: clientRimMat, getLighting: clientGetLighting, applyLighting: clientApplyLighting } = await import('/rendering/core.js');
+      await waitForVisualAssets();
+      assert(clientTableMesh.castShadow&&clientTableMesh.receiveShadow,'The solid tabletop must block light as well as receive piece shadows');
+      const scenery = () => clientScene.children.filter(node=>node.userData.roomTheme);
+      if (room.state.environment==='cozy') {
+        assert(scenery().length===1,'Shared state did not register the cozy room');
+        assert(scenery()[0].userData.roomTheme==='cozy','Production bootstrap bypassed the room-theme runtime');
+        byId('roomSettings').click();
+        assert(!byId('tableThemeMatch').hidden,'Matching table option is missing from the cozy preview');
+        const matchStart=sent.length;
+        byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(matchStart))===JSON.stringify([['table',{rimWood:'oak'}],['tableColor',{color:'#2f6b4f'}]]),'Matching a table sent anything beyond wood/felt appearance');
+        byId('roomSettingsClose').click();
+        const phoneRoom=clientDeviceClass()==='phone';
+        const rugMap=scenery()[0].getObjectByName('Woven rug').material.map;
+        const rugSize=phoneRoom?512:1024;
+        assert(rugMap.image.width===rugSize&&rugMap.image.height===rugSize,'Rug texture has the wrong device resolution');
+        assert(rugMap.anisotropy===(phoneRoom?1:Math.max(1,Math.min(8,clientRenderer.capabilities.getMaxAnisotropy()))),'Rug filtering bypassed device policy');
+        assert(!!clientTableMesh.material.bumpMap===!phoneRoom,'Felt bump shading bypassed phone policy');
+        assert(clientRimMat.map.rotation===0&&clientRimMat.map.repeat.x===1&&clientRimMat.map.repeat.y===1,'Rim grain still uses the old global UV transform');
+        assert(scenery()[0].userData.halfSize.x===50,'Initial cozy dimensions did not follow room hydration');
+        const chairs = [];
+        scenery()[0].traverse(node=>{if(node.name==='Cozy chair model')chairs.push(node)});
+        assert(chairs.length===1,'One seated player must create exactly one chair');
+        assert(chairs.every(chair=>chair.children.some(node=>node.isMesh && node.material?.map && (phoneRoom?!node.material?.normalMap:node.material?.normalMap))), 'Authored chair maps were not preserved');
+        assert(scenery()[0].getObjectByName('Cozy shelf model'),'Production preview did not load the authored shelf');
+        const ceilingModel=scenery()[0].getObjectByName('Cozy ceiling model');
+        assert(ceilingModel&&ceilingModel.children.length===5,'Production room did not load and batch the authored ceiling');
+        assert(scenery()[0].getObjectByName('Vaulted oak ceiling').visible,'Default seated camera does not reveal the approved ceiling');
+        assert(clientCamera.position.y<=8,'Large-table hydration raised the seated camera above the eaves');
+        const requests=performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname);
+        assert(requests.includes('/models/environments/cozy/cozy-game-shelf.glb'),'The production room did not fetch the compressed shelf');
+        assert(!requests.some(url=>url.startsWith('/models/lossless/')||url.endsWith('-lossless.glb')),'Obsolete duplicate model URL requested');
+        assert(policyViolations.length===0,'The compressed room violated the enforced policy: '+policyViolations.join(','));
+        const shelfModel=scenery()[0].getObjectByName('Cozy shelf model');
+        const coinMaterials=new Set();
+        shelfModel.traverse(node=>{
+          if(!node.isMesh)return;
+          for(const material of Array.isArray(node.material)?node.material:[node.material]){
+            if(['metallic','metallic.001'].includes(material.name))coinMaterials.add(material);
+            for(const value of Object.values(material))if(value?.isTexture&&value.image)
+              assert(Math.max(value.image.width,value.image.height)<=512,'Shelf texture exceeds its mobile memory cap');
+          }
+        });
+        assert(coinMaterials.size===2&&[...coinMaterials].every(material=>Math.abs(material.metalness-1)<.00001&&Math.abs(material.roughness-.3)<.00001),'Shelf coins do not match gameplay metal tuning');
+        const {METALS:shelfMetals}=await import('/shared/pieces.js');
+        for(const name of ['Gold','Silver'])
+          assert([...coinMaterials].some(material=>material.color.getHex()===shelfMetals.find(metal=>metal.name===name).hex),'Shelf coin does not match the built-in '+name+' color');
+        const displayBox=scenery()[0].getObjectByName('ShelfDominoesBox');
+        assert(displayBox,'The shelf is missing its built-in dominoes box');
+        const shelfTHREE=await import('three');
+        const displaySize=new shelfTHREE.Box3().setFromObject(displayBox).getSize(new shelfTHREE.Vector3());
+        assert(Math.abs(Math.max(displaySize.x,displaySize.y,displaySize.z)-1.82)<.005,'The shelf dominoes box is not half the approved mock-up size');
+        assert(scenery()[0].getObjectByName('Cozy lamp model'),'Production preview did not load the authored lamp');
+        const plants=[];
+        scenery()[0].traverse(node=>{if(['Cozy rubber model','Cozy snake model','Cozy pothos model'].includes(node.name))plants.push(node)});
+        assert(plants.length===6,'Production preview did not load all six plants');
+        assert(plants.every(plant=>plant.children.some(node=>node.isMesh&&node.material?.map&&(phoneRoom||node.material?.normalMap))),'Plant UV materials were lost');
+        const oak=scenery()[0].getObjectByName('Cozy shelf model').children.find(node=>node.material?.name.includes('satin oak'));
+        assert(oak&&oak.geometry.attributes.uv.array.some(value=>Math.abs(value)>1),'Shelf still uses stretched default cube UVs');
+        const contactShading=[];
+        scenery()[0].traverse(node=>{if(node.userData.cozyContactShadow)contactShading.push(node)});
+        assert(contactShading.length>=9&&contactShading.every(node=>node.material.isMeshBasicMaterial&&!node.castShadow&&!node.receiveShadow),'Furniture contact shading is missing or uses expensive shaders');
+        if(!phoneRoom){
+          assert(chairs.every(chair=>chair.children.some(node=>node.isMesh&&node.castShadow)),'Authored desktop chairs do not cast shadows');
+          const shadowSun=clientScene.children.find(node=>node.isDirectionalLight);
+          const savedLighting=clientGetLighting();
+          const shadowSize=shadowSun.shadow.mapSize.x;
+          const enabled=shadowSun.castShadow;
+          const {COZY_ROOM}=await import('/rendering/cozy-room.js');
+          const verifyRoomShadowBounds=()=>{
+            const cam=shadowSun.shadow.camera;
+            const half=scenery()[0].userData.halfSize;
+            for(const x of [-half.x,half.x])for(const y of [COZY_ROOM.floorY,COZY_ROOM.floorY+COZY_ROOM.wallHeight+half.x*.5+1])for(const z of [-half.z,half.z]){
+              const projected=new shelfTHREE.Vector3(x,y,z).applyMatrix4(cam.matrixWorldInverse).applyMatrix4(cam.projectionMatrix);
+              assert(Math.max(Math.abs(projected.x),Math.abs(projected.y),Math.abs(projected.z))<=1.0001,'Furniture shadow camera clips the room');
+            }
+          };
+          verifyRoomShadowBounds();
+          clientApplyLighting({...savedLighting,azimuth:275,elevation:35},{duration:0});
+          verifyRoomShadowBounds();
+          assert(shadowSun.shadow.mapSize.x===shadowSize&&shadowSun.castShadow===enabled,'Room shadow fitting overrides the selected graphics quality');
+          clientApplyLighting(savedLighting,{duration:0});
+        }
+        if(phoneRoom)scenery()[0].traverse(node=>{
+          if(!node.isMesh)return;
+          assert(!node.receiveShadow&&!node.castShadow,'Phone scenery still uses shadow-map rendering');
+          if(node.name==='Clear window glazing')assert(!node.visible,'Phone glazing still uses blended rendering');
+          for(const material of Array.isArray(node.material)?node.material:[node.material])
+            assert(!material.isMeshPhysicalMaterial&&!material.normalMap&&!material.roughnessMap,'Phone scenery bypassed the compatible material path');
+        });
+        room.state.tableX=10;room.state.tableZ=7;patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===1 && scenery()[0].userData.halfSize.x===20,'State patch did not replace cozy geometry');
+        await waitForVisualAssets();
+        const chairTHREE=await import('three');
+        const roomRoot=scenery()[0];
+        const liveChairs=()=>roomRoot.children.filter(node=>node.name==='Upholstered chair');
+        room.state.players.set('guest',{seat:2,participation:'player'});
+        room.state.players.set('watcher',{seat:5,participation:'spectator'});
+        patches.forEach(fn=>fn(room.state));
+        assert(scenery()[0]===roomRoot&&liveChairs().length===2,'Joining rebuilt the room or counted a spectator');
+        room.state.players.get('guest').seat=4;patches.forEach(fn=>fn(room.state));
+        assert(liveChairs().some(chair=>chair.userData.seat===4),'Chair did not follow a seat change');
+        room.state.players.delete('guest');patches.forEach(fn=>fn(room.state));
+        assert(liveChairs().length===1,'Leaving did not remove the chair');
+        for(let seat=1;seat<8;seat++)room.state.players.set('seat-'+seat,{seat,participation:'player'});
+        patches.forEach(fn=>fn(room.state));
+        assert(liveChairs().length===8,'All eight occupied seats must have chairs');
+        roomRoot.updateWorldMatrix(true,true);
+        for(const chair of liveChairs()){
+          const model=chair.getObjectByName('Cozy chair model');
+          assert(model,'New arrivals did not reuse the loaded chair model');
+          const inverse=model.matrixWorld.clone().invert();
+          const backCenter=new chairTHREE.Vector3();let count=0;
+          model.traverse(mesh=>{
+            if(!mesh.isMesh)return;
+            const vertices=mesh.geometry.attributes.position;
+            for(let i=0;i<vertices.count;i++){
+              const world=new chairTHREE.Vector3().fromBufferAttribute(vertices,i).applyMatrix4(mesh.matrixWorld);
+              if(world.clone().applyMatrix4(inverse).y>.75){backCenter.add(world);count++;}
+            }
+          });
+          const center=chair.getWorldPosition(new chairTHREE.Vector3());
+          const outward=center.clone().setY(0).normalize();
+          assert(count>0&&backCenter.divideScalar(count).sub(center).setY(0).dot(outward)>0,'Authored chair is backwards at seat '+chair.userData.seat);
+        }
+        for(const id of [...room.state.players.keys()])if(id!=='me')room.state.players.delete(id);
+        patches.forEach(fn=>fn(room.state));
+        const beforeScene=sent.length;
+        clientCamera.position.set(18,6,12);clientControls.target.set(14,2,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(scenery()[0].getObjectByName('East wall').visible,'Production loop removed an interior wall during a pan');
+        clientCamera.position.set(0,5,scenery()[0].userData.halfSize.z+2);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!scenery()[0].getObjectByName('South wall').visible,'Production loop did not update the outside-wall cutaway');
+        assert(sent.length===beforeScene,'Camera cutaway sent gameplay messages');
+        const select=byId('roomEnvironment');
+        assert(select.value==='cozy'&&select.options.length===5,'Room style choices did not hydrate');
+        const beforeStyle=sent.length;
+        select.value='standard';select.dispatchEvent(new Event('change'));
+        assert(sent.at(-1)[0]==='roomEnvironment'&&sent.at(-1)[1].environment==='standard','Room style did not use its shared protocol');
+        assert(sent.length===beforeStyle+1&&scenery()[0]===roomRoot,'Style selection changed scenery before a server patch');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&roomRoot.parent===null,'Standard did not dispose the old room');
+        byId('roomSettings').click();
+        assert(select.value==='standard'&&byId('tableThemeMatch').hidden,'A shared style patch left stale settings');
+        room.state.environment='cozy';patches.forEach(fn=>fn(room.state));
+        await waitForVisualAssets();
+        assert(scenery().length===1&&scenery()[0]!==roomRoot,'Switching back did not build one fresh room');
+        byId('roomSettings').click();
+        assert(select.value==='cozy'&&!byId('tableThemeMatch').hidden,'Matching finish did not follow the new theme');
+        byId('roomSettingsClose').click();
+        room.state.tableX=40;room.state.tableZ=28;patches.forEach(fn=>fn(room.state));
+      } else if (room.state.environment==='poker-night') {
+        assert(scenery().length===1&&scenery()[0].userData.roomTheme==='poker-night','Production bootstrap did not register Poker Night');
+        const pokerRoot=scenery()[0];
+        assert(pokerRoot.getObjectByName('Poker pendant')&&pokerRoot.getObjectByName('Poker leather chair'),'Poker fixtures/seating did not build');
+        const rearTHREE=await import('three');
+        const door=pokerRoot.getObjectByName('Poker windowed door');
+        for(let i=0;i<400&&!door.getObjectByName('Poker door model');i++)await new Promise(resolve=>setTimeout(resolve,25));
+        const doorModel=door.getObjectByName('Poker door model');
+        const pane=pokerRoot.getObjectByName('Poker clear door glazing');
+        assert(doorModel&&pane&&pane.visible!==matchMedia('(pointer:coarse)').matches&&!pane.material.depthWrite,'Poker door glazing/phone policy did not load');
+        pokerRoot.updateWorldMatrix(true,true);
+        const origin=new rearTHREE.Vector3(.3,12.6,3).applyMatrix4(door.matrixWorld);
+        const ray=new rearTHREE.Raycaster(origin,new rearTHREE.Vector3(0,0,-1).transformDirection(door.matrixWorld),0,6.5),blocked=[];
+        door.parent.traverse(node=>{
+          if(!node.isMesh||[node.material].flat().every(m=>m.transparent))return;
+          (node.isInstancedMesh?rearTHREE.InstancedMesh:rearTHREE.Mesh).prototype.raycast.call(node,ray,blocked);
+        });
+        assert(!blocked.length,'Opaque Poker dressing blocks the actual door lite');
+        const savedLighting=JSON.stringify(clientGetLighting());
+        byId('roomSettings').click();
+        const select=byId('roomEnvironment');
+        assert(select.value==='poker-night'&&byId('tableThemeName').textContent==='Poker Night','Poker settings did not hydrate');
+        const start=sent.length;byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:'walnut'}],['tableColor',{color:'#1e5c3f'}]]),'Poker matching changed fields beyond wood/felt');
+        byId('roomSettingsClose').click();
+        clientCamera.position.set(0,80,0.1);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!pokerRoot.getObjectByName('Poker ceiling').visible,'Poker pendant/ceiling obstruct overhead view');
+        assert(JSON.stringify(clientGetLighting())===savedLighting,'Poker changed independent lighting');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&pokerRoot.parent===null,'Poker switch leaked scenery');
+        room.state.environment='poker-night';patches.forEach(fn=>fn(room.state));
+        await waitForVisualAssets();
+        assert(scenery().length===1&&scenery()[0]!==pokerRoot,'Poker switch did not construct a fresh owner');
+      } else if (room.state.environment==='medieval-tavern') {
+        assert(scenery().length===1&&scenery()[0].userData.roomTheme==='medieval-tavern','Production bootstrap did not register Medieval Tavern');
+        const tavernRoot=scenery()[0];
+        for(let attempt=0;attempt<400&&(!tavernRoot.getObjectByName('Tavern chair model')||!tavernRoot.getObjectByName('Tavern hearth model')||!tavernRoot.getObjectByName('Tavern bar model')||!tavernRoot.getObjectByName('Tavern clear glazing'));attempt++)await new Promise(resolve=>setTimeout(resolve,25));
+        assert(tavernRoot.getObjectByName('Tavern chair model'),'Authored tavern chair did not load');
+        assert(tavernRoot.getObjectByName('Tavern hearth model')&&tavernRoot.getObjectByName('Tavern bar model'),'Authored hearth/bar did not load');
+        const glazing=tavernRoot.getObjectByName('Tavern clear glazing');
+        assert(glazing&&glazing.material.opacity===0.025&&glazing.material.depthWrite===false,'Window did not preserve sky visibility');
+        const fitTHREE=await import('three');
+        const {MEDIEVAL_TAVERN:fit}=await import('/rendering/rooms/medieval-tavern-theme.js');
+        tavernRoot.updateWorldMatrix(true,true);
+        for(const windowName of ['Tavern leaded window','Tavern rear leaded window']) {
+        const installedWindow=tavernRoot.getObjectByName(windowName);
+        assert(installedWindow.getObjectByName('Tavern window model'),'Second tavern window did not load');
+        const toWindow=installedWindow.matrixWorld.clone().invert();
+        const shutterBounds=new fitTHREE.Box3(),shutterSides=[new fitTHREE.Box3(),new fitTHREE.Box3()],casingMeshes=[];let rearCasingVertices=0;
+        installedWindow.getObjectByName('Tavern window model').traverse(node=>{
+          if(!node.isMesh)return;
+          const names=[node.material].flat().map(m=>m.name);
+          const matrix=toWindow.clone().multiply(node.matrixWorld);
+          if(names.some(name=>name.includes('aged timber framing'))){
+            const positions=node.geometry.attributes.position;
+            for(let i=0;i<positions.count;i++){
+              const point=new fitTHREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(matrix);
+              shutterBounds.expandByPoint(point);shutterSides[point.x<0?0:1].expandByPoint(point);
+            }
+          }
+          if(names.some(name=>name.includes('honey oak joinery'))){
+            casingMeshes.push(node);
+            const positions=node.geometry.attributes.position,normals=node.geometry.attributes.normal;
+            const normalMatrix=new fitTHREE.Matrix3().getNormalMatrix(matrix);
+            for(let i=0;i<positions.count;i++){
+              const p=new fitTHREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(matrix);
+              const n=new fitTHREE.Vector3().fromBufferAttribute(normals,i).applyNormalMatrix(normalMatrix);
+              const outsideOpening=Math.abs(p.x)>=fit.windowWidth/2-.01||p.y<=fit.windowBottom||p.y>=fit.windowBottom+fit.windowHeight;
+              if(n.z<-.99&&outsideOpening){
+                rearCasingVertices++;
+                assert(p.z<fit.wallInteriorFace-fit.windowWallThickness-.10,'Exterior jamb is nearly coplanar with plaster');
+              }
+            }
+          }
+        });
+        assert(!shutterBounds.isEmpty()&&shutterBounds.min.z>fit.wallInteriorFace+.20,'Shutters remain embedded in plaster');
+        assert(rearCasingVertices>0,'Exterior casing geometry was not checked');
+        const west=installedWindow.parent;
+        const plasterMeshes=west.children.filter(node=>node.name==='Textured plaster panel');
+        // Cast through each inner reveal, including the old coincident jamb plane.
+        // Scenery deliberately disables picking: invoke the mesh implementation directly.
+        for(const depth of [-.30,0,.10])for(const direction of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0]]){
+          const origin=new fitTHREE.Vector3(0,(fit.windowBottom+fit.windowHeight/2),depth).applyMatrix4(installedWindow.matrixWorld);
+          const ray=new fitTHREE.Raycaster(origin,new fitTHREE.Vector3(...direction).transformDirection(installedWindow.matrixWorld));
+          const woodHits=[],plasterHits=[];
+          for(const node of casingMeshes)fitTHREE.Mesh.prototype.raycast.call(node,ray,woodHits);
+          for(const node of plasterMeshes)fitTHREE.Mesh.prototype.raycast.call(node,ray,plasterHits);
+          woodHits.sort((a,b)=>a.distance-b.distance);plasterHits.sort((a,b)=>a.distance-b.distance);
+          assert(woodHits.length&&plasterHits.length,'Window reveal geometry was not checked');
+          assert(plasterHits[0].distance-woodHits[0].distance>.25,'Window reveal plaster overlaps or is coplanar with the inner timber face');
+        }
+        assert(shutterSides.every(side=>!side.isEmpty()),'Both shutter leaves were not checked');
+        const shutterCenters=shutterSides.map(side=>side.getCenter(new fitTHREE.Vector3()));
+        assert(Math.abs(shutterCenters[0].x+shutterCenters[1].x)<.02,'Right shutter does not mirror the left beside the frame');
+        for(const node of west.children){
+          if(!node.isMesh)continue;
+          node.geometry.computeBoundingBox();
+          for(let i=0;i<(node.isInstancedMesh?node.count:1);i++){
+            const matrix=toWindow.clone().multiply(node.matrixWorld);
+            if(node.isInstancedMesh){const instance=new fitTHREE.Matrix4();node.getMatrixAt(i,instance);matrix.multiply(instance);}
+            assert(!shutterBounds.intersectsBox(node.geometry.boundingBox.clone().applyMatrix4(matrix)),'Shutters intersect wall masonry or framing');
+          }
+        }
+        }
+        const base=tavernRoot.getObjectByName('Tavern table supports');
+        assert(base,'Tavern omitted its table base');
+        const baseBox=new fitTHREE.Box3().setFromObject(base),tableBox=new fitTHREE.Box3().setFromObject(clientTableMesh);
+        assert(Math.abs(baseBox.min.y-fit.floorY)<.001&&Math.abs(baseBox.max.y-tableBox.min.y)<.001,'Trestles do not connect the floor and real tabletop');
+
+
+        assert(tavernRoot.getObjectByName('Tavern candle wheel')&&tavernRoot.getObjectByName('Tavern occupied chair'),'Tavern fixtures/seating did not build');
+        const savedLighting=JSON.stringify(clientGetLighting());
+        byId('roomSettings').click();
+        const select=byId('roomEnvironment');
+        assert(select.value==='medieval-tavern'&&byId('tableThemeName').textContent==='Medieval Tavern','Tavern settings did not hydrate');
+        const start=sent.length;byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:'oak'}],['tableColor',{color:'#354c36'}]]),'Tavern matching changed fields beyond wood/felt');
+        byId('roomSettingsClose').click();
+        clientCamera.position.set(0,80,0.1);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!tavernRoot.getObjectByName('Tavern ceiling').visible,'Tavern candle wheel/ceiling obstruct overhead view');
+        assert(JSON.stringify(clientGetLighting())===savedLighting,'Tavern changed independent lighting');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&tavernRoot.parent===null,'Tavern switch leaked scenery');
+        room.state.environment='medieval-tavern';patches.forEach(fn=>fn(room.state));
+        await waitForVisualAssets();
+        assert(scenery().length===1&&scenery()[0]!==tavernRoot,'Tavern switch did not construct a fresh owner');
+        const tavernTHREE=await import('three');
+        for(const [shape,x,z] of [['rect',2,2],['roundedRect',10,7],['round',80,56]]){
+          room.state.tableShape=shape;room.state.tableX=x;room.state.tableZ=z;patches.forEach(fn=>fn(room.state));
+          const current=scenery()[0];
+          for(let attempt=0;attempt<400&&(!current.getObjectByName('Tavern hearth model')||!current.getObjectByName('Tavern bar model')||!current.getObjectByName('Tavern stool model'));attempt++)await new Promise(resolve=>setTimeout(resolve,25));
+          assert(current.getObjectByName('Tavern hearth model')&&current.getObjectByName('Tavern bar model')&&current.getObjectByName('Tavern stool model'),'Resized Tavern models did not load');
+          current.updateWorldMatrix(true,true);
+          const hz=shape==='round'?x:z;
+          const protectedArea=new tavernTHREE.Box3(new tavernTHREE.Vector3(-x-5.3,-10,-hz-5.3),new tavernTHREE.Vector3(x+5.3,10,hz+5.3));
+          current.traverse(node=>{
+            if(!['Tavern hearth model','Tavern bar model','Tavern barrel model','Tavern bench model','Tavern stool model'].includes(node.name))return;
+            assert(!protectedArea.intersectsBox(new tavernTHREE.Box3().setFromObject(node)),'Ambient '+node.name+' crowds player seating at '+shape+' '+x);
+          });
+        }
+
+
+      } else if (room.state.environment==='modern-bar') {
+        const THREE=await import('three');
+        const {MODERN_BAR:fit,MODERN_BAR_THEME:theme}=await import('/rendering/rooms/modern-bar-theme.js');
+        const kinds=Object.keys(theme.assets);
+        const ready=root=>kinds.every(kind=>root.getObjectByName('Modern '+kind+' model'));
+        const modern=scenery()[0];
+        assert(scenery().length===1&&modern.userData.roomTheme==='modern-bar','Modern Bar did not bootstrap');
+        for(let i=0;i<400&&!ready(modern);i++)await new Promise(resolve=>setTimeout(resolve,25));
+        assert(ready(modern),'Approved Modern Bar models did not load');
+        const glazing=modern.getObjectByName('Modern clear glazing');
+        assert(glazing&&glazing.material.opacity===.035&&!glazing.material.depthWrite,'Modern glazing hides the saved sky');
+        assert(glazing.visible!==matchMedia('(pointer:coarse)').matches,'Modern glazing ignores the device policy');
+        const door=modern.getObjectByName('Modern glass door');
+        const doorPanes=[];door.traverse(node=>{if(node.name==='Modern door glazing')doorPanes.push(node)});
+        assert(doorPanes.length===2&&doorPanes.every(node=>node.visible!==matchMedia('(pointer:coarse)').matches&&!node.material.depthWrite),'Modern glass/etched-band device policy failed');
+        modern.updateWorldMatrix(true,true);
+        const doorOrigin=new THREE.Vector3(.3,12.6,3).applyMatrix4(door.matrixWorld);
+        const doorRay=new THREE.Raycaster(doorOrigin,new THREE.Vector3(0,0,-1).transformDirection(door.matrixWorld),0,6.5),doorBlocked=[];
+        door.parent.traverse(node=>{
+          if(!node.isMesh||[node.material].flat().every(m=>m.transparent))return;
+          (node.isInstancedMesh?THREE.InstancedMesh:THREE.Mesh).prototype.raycast.call(node,doorRay,doorBlocked);
+        });
+        assert(!doorBlocked.length,'Opaque Modern wall dressing blocks the actual glass door');
+        const nook=modern.getObjectByName('Modern nook slot');
+        assert(nook.parent===door.parent&&nook.getWorldPosition(new THREE.Vector3()).x>0,'Modern nook lost the approved left corner/cutaway');
+        const lighting=JSON.stringify(clientGetLighting());
+        byId('roomSettings').click();
+        assert(byId('roomEnvironment').value==='modern-bar'&&byId('tableThemeName').textContent==='Modern Bar','Modern Bar settings did not hydrate');
+        const start=sent.length;byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:'walnut'}],['tableColor',{color:'#294b4c'}]]),'Modern matching changed independent settings');
+        byId('roomSettingsClose').click();
+        modern.updateWorldMatrix(true,true);
+        const chair=modern.getObjectByName('Modern chair model');
+        const toChair=chair.matrixWorld.clone().invert(),bodyTriangles=[],pipingMeshes=[];
+        chair.traverse(node=>{
+          if(!node.isMesh)return;
+          const names=[node.material].flat().map(mat=>mat.name);
+          if(names.some(name=>name.includes('leather piping')))pipingMeshes.push(node);
+          if(!names.some(name=>name.includes('saddle leather upholstery')))return;
+          const matrix=toChair.clone().multiply(node.matrixWorld),positions=node.geometry.attributes.position,index=node.geometry.index;
+          for(let i=0;i<(index?index.count:positions.count);i+=3){
+            const points=[0,1,2].map(offset=>new THREE.Vector3().fromBufferAttribute(positions,index?index.getX(i+offset):i+offset).applyMatrix4(matrix));
+            const triangle=new THREE.Triangle(...points);
+            if(triangle.getArea()>1e-12)bodyTriangles.push(triangle);
+          }
+        });
+        let checkedPiping=0,maxPipingGap=0;
+        const closest=new THREE.Vector3();
+        for(const node of pipingMeshes){
+          const positions=node.geometry.attributes.position,matrix=toChair.clone().multiply(node.matrixWorld);
+          for(let i=0;i<positions.count;i+=Math.max(1,Math.floor(positions.count/120))){
+            const point=new THREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(matrix);
+            if(point.y<.56)continue;
+            let gap=Infinity;
+            for(const triangle of bodyTriangles){triangle.closestPointToPoint(point,closest);gap=Math.min(gap,closest.distanceTo(point));}
+            maxPipingGap=Math.max(maxPipingGap,gap);checkedPiping++;
+          }
+        }
+        assert(bodyTriangles.length&&checkedPiping>=10,'Authored chair piping contact was not checked');
+        assert(maxPipingGap<.006,'Chair back piping floats away from the angled cushion: '+maxPipingGap);
+        const pendant=modern.getObjectByName('Modern table-pendant model');
+        const lampMaterials=[];pendant.traverse(node=>{if(node.isMesh)lampMaterials.push(...[node.material].flat());});
+        const satin=lampMaterials.find(mat=>mat.name.includes('satin brass luminaire'));
+        assert(satin&&!satin.normalMap&&!satin.roughnessMap&&Math.abs(satin.roughness-.42)<.001,'Table luminaire regained a coarse or stretched finish');
+        const window=modern.getObjectByName('Modern city window');
+        const wood=[],plaster=modern.getObjectByName('Modern west wall').children.filter(node=>node.name==='Textured plaster panel');
+        window.getObjectByName('Modern window model').traverse(node=>{
+          if(node.isMesh&&[node.material].flat().some(mat=>mat.name.includes('powder coated charcoal steel')))wood.push(node);
+        });
+        for(const depth of [-.25,0,.08])for(const direction of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0]]){
+          const origin=new THREE.Vector3(0,fit.windowBottom+fit.windowHeight/2,depth).applyMatrix4(window.matrixWorld);
+          const ray=new THREE.Raycaster(origin,new THREE.Vector3(...direction).transformDirection(window.matrixWorld));
+          const frameHits=[],wallHits=[];
+          for(const node of wood)THREE.Mesh.prototype.raycast.call(node,ray,frameHits);
+          for(const node of plaster)THREE.Mesh.prototype.raycast.call(node,ray,wallHits);
+          frameHits.sort((a,b)=>a.distance-b.distance);wallHits.sort((a,b)=>a.distance-b.distance);
+          assert(frameHits.length&&wallHits.length,'Modern window reveal was not checked');
+          assert(wallHits[0].distance-frameHits[0].distance>.15,'Modern plaster is coplanar with its inner window frame');
+        }
+        const baseBox=new THREE.Box3().setFromObject(modern.getObjectByName('Modern table supports'));
+        const tableBox=new THREE.Box3().setFromObject(clientTableMesh);
+        assert(Math.abs(baseBox.min.y-fit.floorY)<.001&&Math.abs(baseBox.max.y-tableBox.min.y)<.001,'Modern table supports do not reach floor/tabletop');
+        assert(modern.getObjectByName('Modern art slot').parent===modern.getObjectByName('Modern east wall'),'Artwork lost its wall cutaway');
+        clientCamera.position.set(0,100,.1);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!modern.getObjectByName('Modern ceiling').visible,'Modern pendants obstruct overhead play');
+        assert(JSON.stringify(clientGetLighting())===lighting,'Modern Bar changed saved lighting');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&modern.parent===null,'Modern Bar leaked on switch');
+        room.state.environment='modern-bar';patches.forEach(fn=>fn(room.state));
+        for(const [shape,x,z] of [['rect',2,1.4],['roundedRect',10,7],['round',80,56],['hex',80,2],['oval',2,80]]){
+          room.state.tableShape=shape;room.state.tableX=x;room.state.tableZ=z;patches.forEach(fn=>fn(room.state));
+          const current=scenery()[0];
+          for(let i=0;i<400&&!ready(current);i++)await new Promise(resolve=>setTimeout(resolve,25));
+          assert(ready(current),'Modern resize models did not load');
+          current.updateWorldMatrix(true,true);
+          const {tableOutline}=await import('/shared/pieces.js');
+          const hz=Math.max(...tableOutline(shape,x,z).map(point=>Math.abs(point.z)));
+          assert(current.userData.halfSize.z>=hz+fit.clearance,'Modern room clips its playable outline');
+          const protectedArea=new THREE.Box3(new THREE.Vector3(-x-5.3,-10,-hz-5.3),new THREE.Vector3(x+5.3,10,hz+5.3));
+          current.traverse(node=>{
+            if(!['Modern bar model','Modern booth model','Modern stool model','Modern plant model','Modern nook model'].includes(node.name))return;
+            assert(!protectedArea.intersectsBox(new THREE.Box3().setFromObject(node)),'Modern furnishing crowds seating at '+shape+' '+x);
+          });
+        }
+
+      } else {
+        assert(scenery().length===0,'The legacy preview URL overrode the saved Standard room');
+        assert(byId('tableThemeMatch').hidden,'A theme-free room offers a matching table');
+      }
       assert(messages.has('ping') && messages.has('pieceHighlighted') && messages.has('shuffled') && messages.has('dealt'), 'Missing effect/drag bindings');
       byId('sfxVol').value = '37'; byId('sfxVol').dispatchEvent(new Event('input'));
       const audio = await import('/table/audio.js');
@@ -1336,6 +1758,16 @@ const SCENES = [
       assert(localStorage.getItem('ott-accent') === '#123456', 'Accent preference did not persist');
       byId('settingsBtn').click();
       assert(byId('creditsBody').textContent.includes('Libraries'), 'Credits did not render');
+      const meshoptCredit=[...byId('creditsBody').querySelectorAll('a')].find(link=>link.textContent==='meshoptimizer'&&link.href==='https://github.com/zeux/meshoptimizer');
+      assert(meshoptCredit,'Meshopt attribution did not reach the production Credits list');
+      document.querySelector('#settingsModal [data-tab="credits"]').click();
+      for(const compact of [false,true]){
+        document.body.classList.toggle('ui-compact',compact);document.body.classList.toggle('ui-full',!compact);
+        const box=meshoptCredit.getBoundingClientRect();
+        assert(box.width>0&&box.left>=0&&box.right<=innerWidth,'Meshopt credit is clipped in full/compact mode');
+        meshoptCredit.focus();assert(document.activeElement===meshoptCredit,'Meshopt credit is not keyboard focusable');
+      }
+      document.body.classList.toggle('ui-full',full);document.body.classList.toggle('ui-compact',!full);
       byId('settingsClose').click();
       const roster = byId('players'), dock = byId('roomInfoBody');
       byId('seatBtn').click(); assert(byId('seatPop').contains(roster), 'Seat popover lost live roster');
@@ -1994,6 +2426,74 @@ const SCENES = [
       byId('roomSettings').click(); lightTab.click();`,
   },
   {
+    name: 'sky-orientation',
+    root: '#settingsModal',
+    expect: { selector: '.skyOrientation input', min: 4 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const THREE = await import('three');
+      const { createSkybox } = await import('/table/skybox.js');
+      const { applyIcons } = await import('/ui/icons.js');
+      const byId = id => document.getElementById(id);
+      const stored = new Map([['tabletop.skyRes','ultra'],['tabletop.skyTilt','-25']]);
+      const loads = [];
+      class Loader { load(ref, done) { loads.push(done); } }
+      const scene = new THREE.Scene(); scene.background = new THREE.Color('#14181d');
+      const renderer = new THREE.WebGLRenderer({ antialias: false });
+      renderer.setSize(64,64);
+      renderer.debug.onShaderError = () => { throw Error('Sky shader failed to compile'); };
+      const sky = createSkybox({ THREE: {...THREE,TextureLoader:Loader,CubeTextureLoader:Loader}, scene,
+        renderer, deviceClass: () => 'desktop', byId,
+        storage: { getItem: key => stored.get(key) ?? null, setItem: (key,value) => stored.set(key,value) } });
+      sky.bindControls(); sky.sync('/sky');
+      const canvas = document.createElement('canvas'); canvas.width=64; canvas.height=32;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle='#ff0000'; ctx.fillRect(0,0,32,32); ctx.fillStyle='#0000ff'; ctx.fillRect(32,0,32,32);
+      const source = new THREE.CanvasTexture(canvas); source.colorSpace=THREE.SRGBColorSpace;
+      loads[0](source);
+      const camera = new THREE.PerspectiveCamera(60,1,0.1,100);
+      const target = new THREE.WebGLRenderTarget(64,64);
+      const pixel = () => { renderer.setRenderTarget(target); renderer.render(scene,camera);
+        const data = new Uint8Array(4); renderer.readRenderTargetPixels(target,32,32,1,1,data); return [...data]; };
+      const edit = (id,value,type='input') => { byId(id).value=value; byId(id).dispatchEvent(new Event(type)); };
+      assert(byId('skyTilt').value==='-25' && byId('skyTiltDegrees').value==='-25','Saved tilt did not hydrate');
+      edit('skyTilt','0'); edit('skyRotation','0'); const native = pixel();
+      edit('skyRotation','1'); const adapted = pixel();
+      assert(native.every((value,i)=>Math.abs(value-adapted[i])<8),'Adapter changed sky color or default alignment');
+      edit('skyRotationDegrees','180'); const turned = pixel();
+      assert(Math.abs(turned[0]-native[0])>100,'Sky rotation did not change rendered direction');
+      const foreground = new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({color:'#00ff00',toneMapped:false}));
+      foreground.position.z=-2; scene.add(foreground);
+      assert(pixel()[1]>240,'Rotated sky covered the table foreground');
+      scene.remove(foreground); foreground.geometry.dispose(); foreground.material.dispose();
+      edit('skyRotation','0'); edit('skyTiltDegrees','25'); pixel();
+      assert(loads.length===1 && byId('skyTilt').value==='25' && stored.get('tabletop.skyTilt')==='25','Angle reloaded texture or did not stay local');
+      edit('skyTiltDegrees','', 'change'); assert(byId('skyTiltDegrees').value==='25','Empty edit did not restore');
+      document.querySelector('#skyResRow [data-skyres="off"]').click();
+      assert(byId('skyTilt').disabled && byId('skyRotationDegrees').disabled && scene.children.length===0,'Off did not disable fields and release mesh');
+      document.querySelector('#skyResRow [data-skyres="ultra"]').click();
+      const faces = Array.from({length:6},()=>canvas);
+      sky.sync(JSON.stringify({t:'cube',f:Array(6).fill('/face')}));
+      loads.at(-1)(new THREE.CubeTexture(faces)); pixel();
+      assert(scene.children.length===1 && byId('skyTilt').value==='25','Cubemap did not retain angles');
+      sky.sync(''); target.dispose(); renderer.dispose();
+      byId('settingsModal').hidden=false;
+      byId('tableLoading').hidden=true;
+      document.querySelector('#settingsModal [data-pane="ui"]').hidden=false;
+      applyIcons();
+      const wasFull = document.body.classList.contains('ui-full');
+      document.body.classList.remove('ui-full');
+      assert([...document.querySelectorAll('#skyResRow .lbl')].every(label=>getComputedStyle(label).display!=='none'),'Sky quality labels hidden in compact mode');
+      assert(document.querySelector('.skyOrientationLabel').textContent.includes('Tilt'),'Tilt label missing');
+      document.body.classList.toggle('ui-full',wasFull);
+      const row = document.querySelector('.skyOrientationRow');
+      assert(row.scrollWidth<=row.clientWidth,'Sky controls overflow');
+      if (matchMedia('(pointer:coarse)').matches)
+        assert([...document.querySelectorAll('.skyOrientation input')].every(input=>input.getBoundingClientRect().height>=44),'Sky touch targets too small');
+      byId('skyTilt').focus();
+      assert(getComputedStyle(byId('skyTilt')).outlineStyle!=='none','Sky slider lacks a focus indicator');`,
+  },
+  {
     name: 'placard-settings',
     root: '#settingsModal',
     expect: { selector: '#placard-shape option', min: 8 },
@@ -2614,6 +3114,11 @@ const SCENES = [
     expect: { selector: '.pop-group > .overflowMenu', min: 1 },
     drive: `
       ${BE_ADMIN}
+      const deadline = Date.now() + 5000;
+      while (typeof window.onOttRoom !== 'function') {
+        if (Date.now() > deadline) throw Error('Library room binding did not initialize');
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
       document.querySelector('.libTab[data-tab="decks"]').click();
@@ -2726,12 +3231,23 @@ const SCENES = [
   {
     name: 'library-swatches-open',
     root: '#libraryModal',
-    expect: { selector: '.libCard', min: 40 },
+    expect: { selector: '.swatchPop > .pop-menu:not([hidden]) .swatch', min: 2 },
     drive: `
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
+      document.querySelector('#libraryModal .libTab[data-tab="objects"]').click();
       (await import('/ui/icons.js')).applyIcons();
-      document.querySelector('.swatchPop > .pop-trigger').click();`,
+      const trigger = [...document.querySelectorAll('.swatchPop > .pop-trigger')]
+        .find(button => button.getBoundingClientRect().width > 0);
+      if (!trigger) throw new Error('No visible library color control');
+      const menu = trigger.parentElement.querySelector(':scope > .pop-menu');
+      if (!menu.hidden) throw new Error('Swatches started open');
+      trigger.click();
+      const swatches = [...menu.querySelectorAll('.swatch')];
+      if (menu.hidden || swatches.length < 2 || swatches.some(swatch => {
+        const bounds = swatch.getBoundingClientRect();
+        return bounds.width <= 0 || bounds.height <= 0;
+      })) throw new Error('Color control did not reveal usable swatches');`,
   },
   ...['full', 'compact'].map((mode) => ({
     name: 'hand-playing-faces-' + mode,
@@ -2969,12 +3485,271 @@ const VIEWPORTS = [
   { name: 'coarse-390', width: 390, height: 844, touch: true },
 ];
 
+const file = process.argv[2] === '--out' ? process.argv[3] : null;
 const out = {};
+SCENES.push({
+  name: 'library-tile-model-previews',
+  root: '#libraryModal',
+  expect: { selector: '#libraryModal .libPreview img[src^="data:image/"]', min: 2 },
+  drive: `
+    ${BE_ADMIN}
+    const assert=(ok,message)=>{if(!ok)throw Error(message);};
+    const {tilePreviewURL,cardPreviewURL,KIND,cardMesh}=await import('/rendering/graphics.js');
+    const {TILE_MODELS,LEGACY_MAHJONG_FACE_URLS}=await import('/shared/tile-models.js');
+    document.getElementById('tableLoading')?.remove();
+    window.onOttRoom(${STUB_ROOM});
+    document.getElementById('lib2Btn').click();
+    const cases=[
+      ['tiles','Dominoes (double-six)','domino',['domino:6:3','domino:5:5']],
+      ['tiles','Mahjong wall','mahjong',['/mahjong/faces/dragR.png','/mahjong/faces/cir5.png']],
+      ['games','Dominoes','domino',['domino:6:3','domino:5:5']],
+      ['games','Mahjong (136 tiles)','mahjong',['/mahjong/faces/dragR.png','/mahjong/faces/bam1.png']],
+      ['games','Mahjong (144 tiles)','mahjong',['/mahjong/faces/flowPlum.png','/mahjong/faces/seasSpring.png']],
+    ];
+    for(const mode of ['full','compact']) {
+      document.body.classList.toggle('ui-full',mode==='full');
+      document.body.classList.toggle('ui-compact',mode==='compact');
+      for(const [tab,name,tile,fronts] of cases) {
+        document.querySelector('.libTab[data-tab="'+tab+'"]').click();
+        const card=[...document.querySelectorAll('#nlb_'+tab+' .libCard')]
+          .find(card=>card.querySelector('.libName')?.textContent===name);
+        assert(card,'Missing Library entry: '+name);
+        const preview=card.querySelector('.libPreview');
+        preview.scrollIntoView({block:'center'});
+        const images=[...preview.querySelectorAll('img')];
+        assert(images.length===2,'Expected two model previews: '+name);
+        for(let i=0;i<100&&!images.every(image=>image.complete&&image.naturalWidth>0);i++)
+          await new Promise(resolve=>setTimeout(resolve,50));
+        for(const [index,image] of images.entries()) {
+          assert(image.complete&&image.naturalWidth>0,'Preview did not load: '+name);
+          assert(image.src===await tilePreviewURL({tile,front:fronts[index]}),
+            'Library preview differs from the authored tile model: '+name);
+          assert(image.alt===''&&image.naturalWidth<=320&&image.naturalHeight<=320,
+            'Preview must be decorative and bounded: '+name);
+          const bounds=image.getBoundingClientRect(),parent=preview.getBoundingClientRect();
+          assert(bounds.left>=parent.left-.5&&bounds.right<=parent.right+.5&&
+            bounds.top>=parent.top-.5&&bounds.bottom<=parent.bottom+.5,
+            'Tile model preview is cropped: '+name+' '+mode);
+        }
+        assert(card.scrollWidth<=card.clientWidth+1,'Library tile card overflows: '+name+' '+mode);
+      }
+    }
+    // A missing model must leave a legible procedural face, without fetching a retired PNG.
+    const originalFetch=window.fetch;
+    window.fetch=(url,...args)=>String(url instanceof Request?url.url:url).endsWith('/mahjong/Man9.glb')
+      ? Promise.reject(new Error('deliberate model failure')):originalFetch(url,...args);
+    let failed;
+    try {
+      failed=cardMesh({tile:'mahjong',front:'/mahjong/faces/char9.png',back:'mjback'});
+      assert(await failed.userData.tileModelReady===false,'Missing model did not use its fallback');
+      assert(failed.children.length===1&&failed.children[0].visible&&
+        failed.children[0].material[0].map.image instanceof HTMLCanvasElement,
+        'Failed model did not retain a visible tile with a local front texture');
+      const image=new Image();image.src=cardPreviewURL('/mahjong/faces/char9.png');await image.decode();
+      assert(image.src.startsWith('data:image/')&&image.naturalWidth>0,'Missing model has no local face fallback');
+    } finally {
+      window.fetch=originalFetch;
+      if(failed)KIND.card.dispose(failed);
+    }
+    for(const ref of LEGACY_MAHJONG_FACE_URLS) {
+      const image=new Image();image.src=cardPreviewURL(ref);await image.decode();
+      assert(image.naturalWidth>0,'Legacy flower artwork failed to load: '+ref);
+    }
+    const resources=performance.getEntriesByType('resource').map(entry=>decodeURIComponent(new URL(entry.name).pathname));
+    for(const ref of Object.keys(TILE_MODELS.mahjong.faces))
+      assert(!resources.includes(ref)&&!resources.includes('/asset-textures/v1/bundled'+ref+'.webp'),
+        'Rendering requested retired Mahjong artwork: '+ref);
+  `,
+});
+SCENES.push({
+  name: 'cozy-window-sky',
+  page: '/table.html',
+  root: '#windowSkyFixture',
+  expect: { selector: '#windowSkyFixture canvas', min: 1 },
+  drive: `
+    const assert=(condition,message)=>{if(!condition)throw new Error(message);};
+    const THREE = await import('three');
+    const {createModelLoader} = await import('/rendering/model-loader.js');
+    const {createCozyRoom} = await import('/rendering/cozy-room.js');
+    const {createSkybox} = await import('/table/skybox.js');
+    const fixture=document.createElement('div');fixture.id='windowSkyFixture';document.body.append(fixture);
+    const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(64,64);fixture.append(renderer.domElement);
+    const scene=new THREE.Scene();scene.background=new THREE.Color('#14181d');
+    scene.add(new THREE.HemisphereLight(0xffffff,0x888888,1));
+    const camera=new THREE.PerspectiveCamera(40,1,.1,200);
+    camera.position.set(-7,4.3,-12);camera.lookAt(-7,4.3,-17);
+    const ready=new Promise(resolve=>THREE.DefaultLoadingManager.onLoad=resolve);
+    const room=createCozyRoom({THREE,scene,modelLoader:createModelLoader()});room.sync({tableX:10,tableZ:7});await ready;
+    const root=scene.children.find(node=>node.name==='Cozy game room prototype');
+    const windows=[];root.traverse(node=>{if(node.name==='Cozy window model')windows.push(node);});
+    assert(windows.length===4 && windows.every(node=>node.children.some(child=>child.isMesh && child.material.map && child.material.normalMap)), 'Authored window models and maps did not load');
+    const sky=createSkybox({THREE,scene,renderer,deviceClass:()=> 'desktop',byId:id=>document.getElementById(id),storage:{getItem:key=>key==='tabletop.skyRes'?'ultra':'0',setItem(){}}});
+    sky.bindControls();
+    const loadSky=async ref=>{const loaded=new Promise(resolve=>THREE.DefaultLoadingManager.onLoad=resolve);sky.sync(ref);await loaded;};
+    const angle=(axis,value)=>{const input=document.getElementById(axis==='tilt'?'skyTilt':'skyRotation');input.value=String(value);input.oninput();};
+    const target=new THREE.WebGLRenderTarget(64,64);target.texture.colorSpace=THREE.SRGBColorSpace;
+    const sample=visible=>{root.visible=visible;renderer.setRenderTarget(target);renderer.render(scene,camera);const pixel=new Uint8Array(4);renderer.readRenderTargetPixels(target,32,32,1,1,pixel);renderer.setRenderTarget(null);return [...pixel].slice(0,3);};
+    const checks=[];
+    const probe=name=>{const through=sample(true),background=sample(false);root.visible=true;const delta=Math.max(...through.map((value,i)=>Math.abs(value-background[i])));assert(delta<=12,name+' window masks the sky: '+through+' vs '+background);checks.push({name,through,background,delta});return background;};
+    const panorama=document.createElement('canvas');panorama.width=64;panorama.height=32;
+    const ctx=panorama.getContext('2d');const gradient=ctx.createLinearGradient(0,0,64,32);gradient.addColorStop(0,'#275ec6');gradient.addColorStop(1,'#ddb150');ctx.fillStyle=gradient;ctx.fillRect(0,0,64,32);
+    await loadSky(panorama.toDataURL());const panoNative=probe('panorama native');
+    angle('tilt',15);angle('rotation',65);const panoRotated=probe('panorama oriented');
+    assert(panoNative.some((value,i)=>Math.abs(value-panoRotated[i])>8),'Sky orientation did not remain visible through the window');
+    const faces=['#d86060','#60b060','#6080d8','#d8b860','#60b8c8','#a868b8'].map(color=>{const c=document.createElement('canvas');c.width=c.height=4;const x=c.getContext('2d');x.fillStyle=color;x.fillRect(0,0,4,4);return c.toDataURL();});
+    await loadSky(JSON.stringify({t:'cube',f:faces}));angle('tilt',0);angle('rotation',0);const cubeNative=probe('cube native');
+    angle('rotation',90);const cubeRotated=probe('cube oriented');
+    assert(cubeNative.some((value,i)=>Math.abs(value-cubeRotated[i])>20),'Cube rotation did not remain visible through the window');
+    sky.sync('');probe('sky off');
+    camera.position.x=-4;camera.lookAt(-4,4.3,-17);const wall=sample(true),outside=sample(false);root.visible=true;
+    assert(wall.some((value,i)=>Math.abs(value-outside[i])>15),'The wall surrounding the opening no longer occludes the sky');
+    camera.position.set(-15,3,0);camera.lookAt(-20,3,0);const plasterCenter=sample(true);
+    camera.position.z=3;camera.lookAt(-20,3,3);const plasterBeside=sample(true);
+    assert(plasterCenter.every((value,i)=>Math.abs(value-plasterBeside[i])<=6),'The old green picture still overlaps the west plaster wall');
+    fixture.dataset.skyChecks=JSON.stringify(checks);
+    renderer.render(scene,camera);room.dispose();target.dispose();renderer.dispose();
+  `,
+});
+// Exercise synchronized environment selection through the real bootstrap and frame loop.
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-cozy',
+  page: '/table.html?fixtureEnvironment=cozy&environment=standard',
+});
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-poker-night',
+  page: '/table.html?fixtureEnvironment=poker-night',
+});
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-medieval-tavern',
+  page: '/table.html?fixtureEnvironment=medieval-tavern',
+});
+
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-modern-bar',
+  page: '/table.html?fixtureEnvironment=modern-bar',
+});
+
+SCENES.push({
+  name: 'cozy-ceiling-sky',
+  page: '/table.html',
+  root: '#ceilingFixture',
+  expect: { selector: '#ceilingFixture canvas', min: 1 },
+  drive: `
+    const assert=(ok,message)=>{if(!ok)throw Error(message)};
+    const THREE=await import('three');
+    const {createCozyRoom,COZY_ROOM}=await import('/rendering/cozy-room.js');
+    const {createModelLoader}=await import('/rendering/model-loader.js');
+    const phone=matchMedia('(pointer:coarse)').matches;
+    const fixture=document.createElement('div');fixture.id='ceilingFixture';document.body.append(fixture);
+    const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(64,64);fixture.append(renderer.domElement);
+    const scene=new THREE.Scene();scene.background=new THREE.Color('#558ac7');
+    scene.add(new THREE.HemisphereLight(0xffffff,0x888888,1));
+    const camera=new THREE.PerspectiveCamera(35,1,.1,1000);
+    const room=createCozyRoom({THREE,scene,modelLoader:createModelLoader(),deviceClass:()=>phone?'phone':'desktop'});
+    const target=new THREE.WebGLRenderTarget(64,64);target.texture.colorSpace=THREE.SRGBColorSpace;
+    const sample=visible=>{const root=scene.children.find(n=>n.userData.roomTheme);root.visible=visible;renderer.setRenderTarget(target);renderer.render(scene,camera);const p=new Uint8Array(4);renderer.readRenderTargetPixels(target,32,32,1,1,p);renderer.setRenderTarget(null);root.visible=true;return [...p].slice(0,3);};
+    for(const [tableX,tableZ,tableShape] of [[10,7,'rect'],[40,15,'oval'],[12,7,'round']]){
+      const ready=new Promise(resolve=>THREE.DefaultLoadingManager.onLoad=resolve);
+      room.sync({tableX,tableZ,tableShape});await ready;
+      const root=scene.children.find(n=>n.userData.roomTheme),roof=root.getObjectByName('Vaulted oak ceiling');
+      const loaded=root.getObjectByName('Cozy ceiling model');
+      assert(loaded&&loaded.children.length===5,'Ceiling geometry did not fit and batch');
+      const bounds=new THREE.Box3().setFromObject(loaded),half=root.userData.halfSize;
+      assert(Math.abs(bounds.max.x-half.x)<1&&Math.abs(bounds.min.x+half.x)<1&&Math.abs(bounds.max.z-half.z)<1,'Ceiling does not meet the resized walls');
+      loaded.traverse(mesh=>{if(!mesh.isMesh)return;assert(!mesh.castShadow,'Ceiling blacks out table lighting');if(mesh.material.transparent){assert(mesh.visible===!phone&&!mesh.material.depthWrite,'Skylight glazing bypasses device policy');}if(phone)assert(!mesh.material.normalMap&&!mesh.material.roughnessMap&&!mesh.material.isMeshPhysicalMaterial,'Phone ceiling compiles detail shaders');});
+      for(const side of [-1,1]){
+        const lookAt=new THREE.Vector3(side*half.x*.491934955,COZY_ROOM.floorY+COZY_ROOM.wallHeight+half.x*.254032522,0);
+        camera.position.set(0,4,1);camera.lookAt(lookAt);
+        room.update(camera.position,lookAt);assert(roof.visible,'Low camera has no ceiling');
+        for(const color of ['#558ac7','#c99759','#14181d']){
+          scene.background.set(color);const through=sample(true),sky=sample(false);
+          assert(Math.max(...through.map((v,i)=>Math.abs(v-sky[i])))<=12,'Skylight masks sky '+side+' '+tableX+': '+through+' vs '+sky);
+        }
+      }
+      camera.position.set(half.x-2,6,half.z-5);camera.lookAt(half.x,4,-half.z+2);
+      room.update(camera.position,new THREE.Vector3(half.x-6,2,0));
+      assert(root.getObjectByName('East wall').visible,'Panned interior wall cut away');
+      const wall=sample(true),outside=sample(false);
+      assert(wall.some((value,i)=>Math.abs(value-outside[i])>15),'Visible side wall no longer occludes the sky');
+      camera.position.set(0,COZY_ROOM.floorY+COZY_ROOM.wallHeight+2,0);room.update(camera.position,new THREE.Vector3());
+      assert(roof.visible,'Ceiling disappeared above the eaves while still below the ridge');
+      camera.position.set(0,4,-35);room.update(camera.position,new THREE.Vector3(0,14,0));
+      assert(!roof.getObjectByName('north ceiling gable').visible&&roof.getObjectByName('south ceiling gable').visible,'Near gable obscures the ceiling instead of following its wall cutaway');
+      camera.position.set(0,35,20);room.update(camera.position,new THREE.Vector3());assert(!roof.visible,'Elevated camera cannot see the table');
+      camera.position.set(0,100,0);room.update(camera.position,new THREE.Vector3());assert(!roof.visible,'Overhead roof did not cut away');
+    }
+    fixture.dataset.checked='resizing, two clear apertures, device materials, cutaways';
+    room.dispose();target.dispose();renderer.dispose();
+  `,
+});
+
+// Keep the approved text action visible and operable in full/compact and touch layouts.
+SCENES.push({
+  name: 'room-theme-match',
+  root: '#roomSettingsModal',
+  expect: { selector: '#tableThemeMatch:not([hidden]) button', min: 1 },
+  drive: `
+    const assert=(ok,message)=>{if(!ok)throw Error(message)};
+    const THREE=await import('three');
+    const {createRoomSettings}=await import('/table/room-settings.js');
+    const {getRoomTheme}=await import('/rendering/rooms/room-themes.js');
+    const byId=id=>document.getElementById(id);
+    let rank=2;
+    const sent=[];
+    const room={state:{environment:'poker-night',tableX:10,tableZ:7,tableShape:'roundedRect',rimWood:'walnut',feltColor:'#123456',scale:{},whiteboard:{},players:new Map()},send:(...args)=>sent.push(args)};
+    const settings=createRoomSettings({scene:new THREE.Scene(),gridMesh:()=>null,gridLiftFallback:.05,resizeTable(){},setTableColor(){},setRimWood(){},applyLighting(){},getQuality:()=> 'medium',setQuality(){},getRoom:()=>room,getEnvironmentTheme:()=>getRoomTheme(room.state.environment),getRank:()=>rank,onTableResize(){},syncWhiteboardSettings(){},relabelOverlays(){},byId,setIcon(){}});
+    settings.bindControls();
+    byId('roomSettings').click();
+    const button=byId('tableThemeApply');
+    for(const compact of [false,true]){
+      document.body.classList.toggle('ui-compact',compact);document.body.classList.toggle('ui-full',!compact);
+      const select=byId('roomEnvironment');
+      const selectBox=select.getBoundingClientRect();
+      assert(selectBox.width>0&&selectBox.left>=0&&selectBox.right<=innerWidth,'Room style selector is clipped');
+      assert(select.value==='poker-night'&&select.options.length===5,'Room style options are missing');
+      assert(select.labels[0].textContent.trim()==='Room style'&&select.getAttribute('aria-describedby')==='roomEnvironmentHint','Room selector lost its accessible name or hint');
+      if(matchMedia('(pointer:coarse)').matches)assert(selectBox.height>=44,'Room style touch target is too short');
+      select.focus();assert(document.activeElement===select,'Room style is not keyboard focusable');
+      const beforeStyle=sent.length;select.value='standard';select.dispatchEvent(new Event('change'));
+      assert(sent.length===beforeStyle+1&&sent.at(-1)[0]==='roomEnvironment'&&sent.at(-1)[1].environment==='standard','Room style failed to send one shared change');
+      assert(room.state.environment==='poker-night'&&select.value==='poker-night','Room selector bypassed authoritative state');
+      const box=button.getBoundingClientRect();
+      assert(box.width>0&&box.left>=0&&box.right<=innerWidth,'Matching table control is clipped');
+      assert(button.scrollWidth<=button.clientWidth,'Matching table label is truncated');
+      assert(button.textContent.trim()==='Use matching table','Compact mode lost the text action');
+      if(matchMedia('(pointer:coarse)').matches)assert(box.height>=44,'Matching table touch target is too short');
+      assert(button.getAttribute('aria-describedby')==='tableThemeHint','Matching action lost its explanatory text');
+      button.focus();assert(document.activeElement===button,'Matching action is not keyboard focusable');
+      button.click();
+      assert(sent.at(-2)[0]==='table'&&sent.at(-1)[0]==='tableColor','Matching action did not use existing settings messages');
+      assert(room.state.rimWood==='walnut'&&room.state.feltColor==='#123456','A theme mutated synchronized table state');
+    }
+    rank=0;const before=sent.length;button.click();assert(sent.length===before,'Demoted role used a stale matching action');
+    document.body.classList.remove('ui-compact');document.body.classList.add('ui-full');
+  `,
+});
+
+// Keep expensive WebGL regression iteration bounded while retaining both device profiles.
+if (process.env.COMPONENT_SCENE) {
+  const selected = SCENES.filter((scene) => scene.name === process.env.COMPONENT_SCENE);
+  if (!selected.length) throw new Error(`Unknown component scene: ${process.env.COMPONENT_SCENE}`);
+  SCENES.splice(0, SCENES.length, ...selected);
+}
+
 // Raster previews use the same bounded image format as production. serveDir
 // serves static fixtures, so provide the bundled derivative responses explicitly.
-const playingCardThumbnails = Object.fromEntries(
+const bundledThumbnails = Object.fromEntries(
   await Promise.all(
-    [...PLAYING_CARD_BACKS, ...PLAYING_CARD_FACES, ...PLAYING_CARD_JOKERS].map(async ({ ref }) => [
+    [
+      ...PLAYING_CARD_BACKS,
+      ...PLAYING_CARD_FACES,
+      ...PLAYING_CARD_JOKERS,
+      ...LEGACY_MAHJONG_FACE_URLS.map((ref) => ({ ref })),
+    ].map(async ({ ref }) => [
       decodeURIComponent(assetThumbnailURL(ref).split('?')[0]),
       {
         body: await sharp(staticAssetPath(ref))
@@ -2986,12 +3761,24 @@ const playingCardThumbnails = Object.fromEntries(
     ]),
   ),
 );
+const uploadedThumbnail = await sharp({
+  create: { width: 320, height: 160, channels: 3, background: '#4b7c91' },
+})
+  .webp()
+  .toBuffer();
+const uploadedThumbnails = Object.fromEntries(
+  ['sky', 'dice', 'boards', 'mats', 'decks'].map((kind) => [
+    `/asset-textures/v1/${kind}/0123456789abcdefab.png.webp`,
+    { body: uploadedThumbnail, type: 'image/webp' },
+  ]),
+);
 const server = await serveDir({
   root: ROOT,
   stubOnly: ['/client.js', '/landing.js', '/admin.js'], // most scenes exercise controllers independently
   mounts: { '/shared/': SHARED },
   routes: {
-    ...playingCardThumbnails,
+    ...bundledThumbnails,
+    ...uploadedThumbnails,
     '/__admin-live.js': {
       body: await readFile(resolve(ROOT, 'admin.js'), 'utf8'),
       type: 'text/javascript',
@@ -3051,25 +3838,35 @@ for (const vp of VIEWPORTS)
     }
 
     const key = `${scene.name} @${vp.name}`;
-    out[key] = JSON.parse(
-      await page.evaluate(
-        snapshotExpression({ root: scene.root, revealHidden: false, normalizeDataUrls: true }),
-      ),
-    );
+    if (file)
+      out[key] = JSON.parse(
+        await page.evaluate(
+          snapshotExpression({ root: scene.root, revealHidden: false, normalizeDataUrls: true }),
+        ),
+      );
     console.log(
-      `  ${key}: ${found} ${scene.expect.selector}, ${Object.keys(out[key]).length} elements`,
+      `  ${key}: ${found} ${scene.expect.selector}` +
+        (file ? `, ${Object.keys(out[key]).length} elements` : ''),
     );
     await page.close();
   }
 
 await cdp.close();
 server.close();
+const missingMahjong = server.missing.filter((path) =>
+  path.startsWith('/asset-textures/v1/bundled/mahjong/faces/'),
+);
+if (missingMahjong.length) {
+  console.error(
+    `  FAIL  missing Mahjong thumbnail fixtures: ${[...new Set(missingMahjong)].join(' ')}`,
+  );
+  bad++;
+}
 if (server.missing.length)
   console.log(
     `  (${new Set(server.missing).size} asset paths 404'd: ${[...new Set(server.missing)].slice(0, 3).join(' ')}…)`,
   );
 
-const file = process.argv[2] === '--out' ? process.argv[3] : null;
 if (file) {
   await writeFile(file, JSON.stringify(out, null, 0));
   console.log(`wrote ${file}`);

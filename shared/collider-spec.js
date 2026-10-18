@@ -7,7 +7,7 @@ import {
   PROPS,
   cardGeom,
   deckHeight,
-  dieR,
+  dieGeometrySize,
   dieVerts,
   dispenserDefinition,
   stackVisible,
@@ -76,7 +76,12 @@ export function colliderSpec(
     const vertices = sides === 6 ? null : dieVerts(sides);
     return vertices
       ? { type: 'convex', vertices }
-      : primitiveColliderSpec(undefined, dieR(6), dieR(6), dieR(6));
+      : primitiveColliderSpec(
+          undefined,
+          dieGeometrySize(6),
+          dieGeometrySize(6),
+          dieGeometrySize(6),
+        );
   }
 
   if (shape === 'prop') {

@@ -8,7 +8,15 @@ import express from 'express';
 import { createStaticAssetRouter } from '../server/http/routes/static-assets.js';
 import { staticAssetPath, staticAssetMounts } from '../server/static-assets.js';
 import { serveDir } from '../scripts/lib/headless.mjs';
-import { BOARDS, PROPS, DECK_MODELS, DISPENSERS, DICE_MODELS, MAHJONG } from '../shared/pieces.js';
+import {
+  BOARDS,
+  PROPS,
+  DECK_MODELS,
+  DISPENSERS,
+  DICE_MODELS,
+  TILE_MODELS,
+} from '../shared/pieces.js';
+import { LEGACY_MAHJONG_FACE_URLS } from '../shared/tile-models.js';
 import { BUILTIN_SKIES } from '../public/table/skybox.js';
 import { MUSIC } from '../public/credits.js';
 import {
@@ -37,10 +45,11 @@ test('bundled catalog URLs still serve their assets after the directory move', a
     ),
     ...BUILTIN_SKIES.map((entry) => entry.url),
     ...MUSIC.map((entry) => '/music/' + entry.file),
-    ...MAHJONG.suits.flatMap((suit) =>
-      Array.from({ length: 9 }, (_, i) => `${MAHJONG.base}${suit}${i + 1}.png`),
-    ),
-    ...[...MAHJONG.honors, ...MAHJONG.bonus].map((face) => `${MAHJONG.base}${face}.png`),
+    ...Object.values(TILE_MODELS).flatMap((family) => [
+      family.concealed,
+      ...Object.values(family.faces).map((face) => face.url),
+    ]),
+    ...LEGACY_MAHJONG_FACE_URLS,
   ]);
   for (const category of ['sounds', 'textures'])
     for (const file of await readdir(staticAssetPath(category))) urls.add(`/${category}/${file}`);
@@ -49,6 +58,8 @@ test('bundled catalog URLs still serve their assets after the directory move', a
     assert.equal(response.status, 200, url);
     assert.equal(+response.headers.get('content-length'), (await stat(staticAssetPath(url))).size);
   }
+  for (const ref of Object.keys(TILE_MODELS.mahjong.faces))
+    assert.equal((await fetch(origin + ref, { method: 'HEAD' })).status, 404, ref);
 });
 
 test('relocating the configured root preserves public URLs, caching, and audio ranges', async (t) => {
@@ -59,7 +70,7 @@ test('relocating the configured root preserves public URLs, caching, and audio r
   for (const directory of Object.values(staticAssetMounts(original)))
     await mkdir(directory, { recursive: true });
   await mkdir(join(original, 'mahjong', 'faces'));
-  await writeFile(join(original, 'mahjong', 'faces', 'bam1.png'), 'face');
+  await writeFile(join(original, 'mahjong', 'faces', 'flowLotus.png'), 'face');
   for (const category of ['sky', 'textures', 'models', 'music', 'sounds'])
     await writeFile(join(original, category, 'example.ogg'), '0123456789');
   await writeFile(join(original, 'secret.txt'), 'outside the category mount');
@@ -73,10 +84,10 @@ test('relocating the configured root preserves public URLs, caching, and audio r
     assert.equal(await response.text(), '0123456789');
     assert.match(response.headers.get('cache-control'), /max-age=0/);
   }
-  const face = await fetch(origin + '/mahjong/faces/bam1.png');
+  const face = await fetch(origin + LEGACY_MAHJONG_FACE_URLS[0]);
   assert.equal(await face.text(), 'face');
   assert.match(face.headers.get('cache-control'), /max-age=86400/);
-  const cached = await fetch(origin + '/mahjong/faces/bam1.png', {
+  const cached = await fetch(origin + LEGACY_MAHJONG_FACE_URLS[0], {
     // Explicit revalidation policy: fetch otherwise adds no-cache for conditional requests,
     // which deliberately makes Express send a fresh 200 response instead of a 304.
     headers: { 'If-None-Match': face.headers.get('etag'), 'Cache-Control': 'max-age=0' },
@@ -96,7 +107,7 @@ test('browser fixtures use the same bundled-asset locations and allow explicit m
   await writeFile(join(root, 'custom.glb'), 'fixture override');
   const server = await serveDir({ root, mounts: { '/models/': root } });
   t.after(() => server.close());
-  const face = await fetch(server.origin + MAHJONG.base + 'bam1.png', { method: 'HEAD' });
+  const face = await fetch(server.origin + LEGACY_MAHJONG_FACE_URLS[0], { method: 'HEAD' });
   assert.equal(face.status, 200);
   const model = await fetch(server.origin + '/models/custom.glb');
   assert.equal(await model.text(), 'fixture override');

@@ -1,6 +1,7 @@
 import { createDemoRouter } from './server/http/routes/demo.js';
 import { createDemoRuntime } from './server/demo-runtime.js';
 import { createAccountSecurityRouter } from './server/http/routes/account-security.js';
+import { normalizeRoomEnvironment } from './shared/room-environments.js';
 import { createRecoveryMailer } from './server/recovery-mail.js';
 import { createAssetFilesRouter } from './server/http/routes/asset-files.js';
 import { createPieceVisibility, broadcastPieceEvent } from './server/game/piece-visibility.js';
@@ -378,7 +379,8 @@ const {
 class TableRoom extends Room {
   static accessKind = 'table';
   static async onAuth(_token, options) {
-    await roomAccess.preflight(options, this.accessKind);
+    // Colyseus invokes static auth as a plain callback, without a class receiver.
+    await roomAccess.preflight(options, 'table');
     return true; // admission is repeated in onJoin, never trusted from the reservation
   }
 
@@ -427,6 +429,7 @@ class TableRoom extends Room {
       if (/^#[0-9a-f]{6}$/i.test(rs.feltColor || '')) this.state.feltColor = rs.feltColor;
       this.applyScale(rs.scale); // grid + measurement calibration (seeded defaults survive a null column)
       this.state.skybox = validSky(String(rs.skybox || '')) ? String(rs.skybox || '') : '';
+      this.state.environment = normalizeRoomEnvironment(rs.environment);
       this.defaultLighting = normalizeLighting(rs.lighting);
       Object.assign(this.state.lighting, this.defaultLighting);
       this.savedScene = rs.scene || null; // GM's last saved table state — applied below, once physics maps exist
@@ -839,10 +842,9 @@ class TableRoom extends Room {
     return removeRoomPiece(this, id);
   }
 
-  // Apply a color to one piece, validating by type (shared by the single `recolor` message and
-  // the `recolorGroup` batch). Returns true if it changed. A die takes body + number color; a
-  // prop takes body; a poker/coin dispenser takes its tint; a team bowl takes a team flag.
-  // Anything else — cards, boards — is left untouched. Writing props re-syncs it to every client.
+  // Apply validated color/team/finish changes, or registered tile-card/deck material patches.
+  // Both recolor message variants use this operation; ordinary cards and boards are unsupported.
+  // Returns true when updated props are written to synchronized state.
   recolorPiece(id, opts = {}) {
     return recolorRoomPiece(this, id, opts); // synced → every client rebuilds the piece
   }
@@ -913,9 +915,6 @@ class TableRoom extends Room {
     clearGameTable(this);
   }
 
-  // Serialize the current table into a scene payload: the table size, and every
-  // piece with its transform. A deck's private card list rides along so it comes
-  // back as a real deck; a face-down card carries its private front.
   // The per-room scale as a plain object (grid + measurement calibration), for both the
   // durable room row and the scene snapshot, so a saved scene restores its grid/units too.
   scaleSnapshot() {
@@ -933,6 +932,8 @@ class TableRoom extends Room {
     applyRoomTrays(this, seats);
   }
 
+  // Serialize table configuration and pieces for persistence, including concealed content.
+  // This payload is not public room state; serializeGame adds the account-owned player layer.
   serializeScene(options) {
     return serializePersistedScene(this, options);
   }
@@ -1076,6 +1077,7 @@ class TableRoom extends Room {
   async onReconnect(client) {
     await roomAccess.reconnect(this, client);
     this.visibility.syncClient(client);
+    this.sendHand(client);
     client.send('whoami', { isAdmin: this.isAdmin(client), userId: String(client.auth.userId) });
   }
 
@@ -1148,7 +1150,6 @@ class TableRoom extends Room {
     advancePlayerTurn(this);
   }
 
-  // Copy a physics body's position + orientation into its synced Piece record.
   // --- Dev profiling (docs/ROADMAP.md §1) ------------------------------------
   // Gated behind PERF_LOG=1. Fed the just-measured world.step duration and the real
   // inter-tick delta each tick; logs a rolling ~1s summary. The awake count is the
@@ -1188,16 +1189,14 @@ class TableRoom extends Room {
     });
   }
 
+  // Copy a physics body's position and orientation into its synchronized Piece record.
   writeTransform(piece, body) {
     return writePieceTransform(piece, body);
   }
 
-  // The simulation heartbeat, run 60×/second. Three passes over the pieces
-  // (drive held ones, self-right the rest, advance flips), then step the world
-  // and publish the results. dtMs is the real time since the last tick.
   // --- Pin-when-snapped: freeze a settled snap-to-grid piece so neighbours can't
   // nudge it off its cell (chess/checkers). It stays collidable and grabbable; a grab
-  // unpins it (see update Pass 1). Only ever touches pieces that are DYNAMIC to begin
+  // unpins it. Only ever touches pieces that are DYNAMIC to begin
   // with, so boards and other static bodies are never affected.
   pinPiece(id) {
     return pinRoomPiece(this, id);
@@ -1209,6 +1208,9 @@ class TableRoom extends Room {
     return roomPieceWantsSnap(this, piece);
   }
 
+  // Simulation heartbeat: recover inspections, prepare held/self-righting/pin/flip motion,
+  // step physics, recover escapes, then publish transforms and update fog auras.
+  // dtMs is the elapsed time since the last tick.
   update(dtMs) {
     recoverPendingInspections(this);
     const dt = dtMs / 1000;
@@ -1278,6 +1280,10 @@ class TableRoom extends Room {
 // testing library assets live. The admin joins at max role + admin rights.
 class EditorRoom extends TableRoom {
   static accessKind = 'editor';
+  static async onAuth(_token, options) {
+    await roomAccess.preflight(options, 'editor');
+    return true;
+  }
   async authorizeJoin(client, options) {
     return roomAccess.authorize(this, client, options, 'editor');
   }
@@ -1338,7 +1344,7 @@ app.use(
     },
   }),
 );
-// Sink for CSP violation reports during the report-only phase — logs what WOULD block.
+// Receive violation reports from the enforced CSP.
 app.post(
   '/csp-report',
   rateLimitAuth,

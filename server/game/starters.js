@@ -1,4 +1,4 @@
-import { BOARDS, PROPS, STARTERS, dieR } from '../../shared/pieces.js';
+import { BOARDS, PROPS, STARTERS, dieGeometrySize } from '../../shared/pieces.js';
 import { mahjongWallFits, mahjongWallLayout } from '../../shared/mahjong-wall.js';
 
 // Build the starter-layout orchestrator around the room's existing inventory and geometry rules.
@@ -58,7 +58,7 @@ export function createStarterSetup({ deckBuilders, spawnMahjongWall, geoOf, maxP
       if (!result.ok) return result;
     }
     for (const { x, z, ...props } of def.dice || [])
-      room.spawn('die', [x, dieR(props.sides) + 0.03, z], props, [0, 0, 0, 1]);
+      room.spawn('die', [x, dieGeometrySize(props.sides) + 0.03, z], props, [0, 0, 0, 1]);
     for (const bowl of def.bowls || []) {
       room.spawn('dispenser', [bowl.x, spawnY, bowl.z], {
         disp: bowl.disp,
