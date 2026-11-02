@@ -8,6 +8,112 @@ exact current artifacts in the [inventory](DEPENDENCY_INVENTORY.md). The
 local migration. Rollout needs a coordinated server/SDK restart and browser refresh,
 with backup/rollback and manual deployment acceptance before release.
 
+## Upgrading to 0.23.1
+
+Prepared 2026-11-02 as a stable patch from `main`, with the production dependency
+fix backported from dev commit `82f857b`. It locks body-parser **1.20.9**, qs
+**6.16.1** and Nodemailer **10.2.1**, and raises the Nodemailer floor to `^10.2.1`.
+Express stays **4.22.3**. The previously merged stable table-rim bugfix and stable/
+development release workflow are included. New room themes, models, shared pup
+and migrations 028–030 remain on `dev`.
+
+From 0.23.0, save active games before the restart. Source/native operators use
+Node 24+ and install the locked production dependencies with `npm ci --omit=dev`
+in the release directory. Docker operators select `optimuspryne/open-tabletop:0.23.1`
+after publication and recreate the app container. Keep the previous app artifact
+and normal database/upload backup for rollback. Existing snapshots and database
+schema remain compatible; no new migration, environment variable or port change
+is introduced. Restart the server and refresh clients for the included rim fix.
+Upgrades from older releases must also follow their existing upgrade requirements.
+
+Validation and publication are tracked independently: this preparation does not
+publish a tag/image, update a running installation or mark external SMTP/TLS,
+real-device or multiplayer acceptance complete. Stable `v0.23.1` publication must
+follow the source guard and full CI workflow after an approved push to `main`.
+Merge the published stable release back into `dev` before the next development
+release; preserve the local lockfile updates during that synchronization.
+
+Stable verification on 2026-11-02:
+
+- Node **24.22.2**, clean isolated locked install: `npm run check` passed lint,
+  formatting, CSS and all **1,238** stable tests; `test:accounts` passed all six
+  full/compact desktop/touch layouts. This stable count excludes development-only
+  theme tests; the earlier 1,383-test result below describes the dev fix.
+- Built the real Dockerfile with `--pull` and ordinary locked production install
+  as local image `open-tabletop:release-0.23.1-check`. Its linux/amd64 **Node
+  24.22.2**, UID **100** runtime passed all **47** schema, access, privacy,
+  native Sharp/HTTP derivative and dependency-regression smoke tests.
+- `npm run audit` inside that production-only image passed with **zero**
+  vulnerabilities. Installed versions are body-parser 1.20.9, qs 6.16.1,
+  Nodemailer 10.2.1 and Sharp 0.35.5.
+- Verified the model manifest, shared room catalog and SQL baseline remain
+  byte-identical to stable main. Compared with v0.23.0, prior changelog entries
+  are unchanged and the earlier table-rim fix is the only app-source change.
+- Version/image examples, release-note extraction, local links, YAML/shell syntax
+  and diff whitespace checks pass. Main/tag publication, hosted CI, arm64,
+  external SMTP/TLS and deployed upgrade/rollback remain unverified.
+
+Release smoke test after publication: start the updated image, sign in, open an
+existing room, check the rim after refreshing, and exercise recovery mail if SMTP
+is configured. Save active games before restart; publication itself does not
+restart any running installation.
+
+Implementation summary:
+
+| Files | Change |
+| --- | --- |
+| `package.json`, `package-lock.json` | Backport only the selected security tree; set app/root-lock version 0.23.1 |
+| `test/dependency-security.js` | Reuse the four dependency regressions from dev; no new application helper |
+| `CHANGELOG.md` | Prepare 0.23.1 notes from stable unreleased changes and retain historical release entries |
+| `README.md`, `docker-compose.yml` | Select image 0.23.1 in examples and explain the patch upgrade |
+| `docs/ARCHITECTURE.md`, `docs/REFERENCE.md` | Record stable scope, dependency contracts and unchanged runtime ownership |
+| `docs/DEPENDENCY_INVENTORY.md`, this guide | Record exact versions, isolated backport, verification and publication limits |
+
+## Production dependency security update — 2026-11-02
+
+The production dependency tree selects body-parser **1.20.9**, qs **6.16.1**
+through the existing override, and Nodemailer **10.2.1** with minimum `^10.2.1`.
+Express stays **4.22.3**. This fixes the reported production audit findings while
+preserving the CI threshold, application adapters, SMTP/TLS configuration and CSP.
+See the [inventory](DEPENDENCY_INVENTORY.md#production-audit-fix--2026-11-02) for
+advisories, exact scope and the separate development-tool audit findings.
+
+Source/native deployments use Node 24+ and run `npm ci --omit=dev` in the release
+directory, then restart the application. Docker operators rebuild/pull the updated
+app image and restart it. This dependency-only update requires no migration,
+environment variable, port or browser refresh. Pending feature migrations and
+coordinated runtime upgrades still apply.
+
+Verification uses an isolated copy of the committed source with only the selected
+dependency changes, preserving the working installation and other local lockfile
+updates. Hosted CI, external SMTP/TLS and deployment acceptance remain separate.
+No push, publication or deployment is performed.
+
+Initial dev verification on 2026-11-02, using Node **24.22.2**:
+
+- Clean isolated install and `npm run check`: lint, format, CSS and all **1,383**
+  tests passed. Four new dependency cases exercise hostile qs values, three mail
+  parsing ambiguities, the existing recovery adapter with a real JSON transport,
+  and valid/corrupt gzip/deflate HTTP bodies. The qs case also reproduces the
+  failure against the original installed 6.16.0. The HTTP case is a compatibility
+  and error-handling check, not a reproduction of every trailing-byte exploit.
+- `npm run test:accounts`: all **six** full/compact desktop/touch layouts passed.
+- Reproduced the CI audit with fresh `npm ci --omit=dev --ignore-scripts`, then
+  `npm run audit`: **zero production vulnerabilities**, exit 0. The separately
+  reviewed full development audit retains the moderate tooling finding recorded
+  in the inventory; no production finding is deferred.
+- Documentation links and diff whitespace passed. The working installation was
+  preserved; run the locked install before using the patched packages locally.
+
+| Files | Change |
+| --- | --- |
+| `package.json`, `package-lock.json` | Raise the existing Nodemailer floor and qs override; lock only the three selected package records and root requirement |
+| `test/dependency-security.js` | Add four behavior/failure cases, a local Express fixture and actual mail serialization; reuse `createRecoveryMailer` without production changes |
+| `CHANGELOG.md` | Record the security fix and reinstall/restart requirement |
+| `docs/DEPENDENCY_INVENTORY.md` | Record exact versions, advisories, scope and separate tooling follow-up |
+| `docs/ARCHITECTURE.md`, `docs/REFERENCE.md` | Update dependency boundaries and regression-test contracts |
+| `docs/RELEASING.md` | Record rollout requirements, verification and remaining deployment/SMTP acceptance |
+
 ## 0.23.0 Node runtime alignment
 
 The app now requires **Node.js 24 or newer**. `.nvmrc` selects Node 24 for local

@@ -52,11 +52,16 @@ restarts never reset its password. Two named volumes keep your data:
 `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 > **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
-> `image: optimuspryne/open-tabletop:0.23.0` to pull the published image instead. Upgrading later is
+> `image: optimuspryne/open-tabletop:0.23.1` to pull the published image instead. Upgrading later is
 > `docker compose pull && docker compose up -d` — the app auto-applies any new migrations itself.
 >
 > **Playing beyond your LAN?** Put it behind a reverse proxy with TLS — see
 > [Security & production posture](#security--production-posture).
+
+**Upgrading from 0.23.0 to 0.23.1:** save active games, update/recreate the app
+with the `0.23.1` image (or reinstall locked source dependencies), and restart it.
+Refresh clients for the already-merged table-rim fix. No new migration or
+configuration change is needed. See the [0.23.1 upgrade notes](docs/RELEASING.md#upgrading-to-0231).
 
 **Upgrading from 0.22.0 to 0.23.0:** back up the database and uploads, update/recreate
 all app instances, and refresh all browsers together for Colyseus 0.18 and the new room
@@ -217,7 +222,7 @@ docker run --name open-tabletop-app -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
   -e REDIS_URL=redis://redis-host:6379 \
-  optimuspryne/open-tabletop:0.23.0
+  optimuspryne/open-tabletop:0.23.1
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
@@ -307,7 +312,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.23.0
+    image: optimuspryne/open-tabletop:0.23.1
     user: appuser                         # matches the image's non-root runtime user
     restart: unless-stopped
     container_name: open-tabletop-app

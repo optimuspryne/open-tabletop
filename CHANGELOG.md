@@ -8,20 +8,27 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
-- Separate stable releases on `main` from next-release integration on `dev`.
-  Run CI on both branches and reuse the full CI suite before publishing a release.
-  Require stable `vX.Y.Z` tags whose commits belong to `main`; development-only
-  commits and prerelease tags cannot update published images or Docker `latest`.
-  Document feature branches, release promotion and hotfix synchronization.
+## [0.23.1] — 2026-11-02
+
+**Upgrade from 0.23.0:** save active games, install the new locked dependencies or
+recreate the app from the `0.23.1` image, then restart the server. Refresh browsers
+for the table-rim correction. No new database migration, environment variable or
+port change is required. See [upgrade notes](docs/RELEASING.md#upgrading-to-0231).
+
+### Fixed
+- Patch production dependency advisories with body-parser **1.20.9**, qs
+  **6.16.1** through the existing override, and Nodemailer **10.2.1** with minimum
+  `^10.2.1`. Keep Express **4.22.3** and the production audit threshold unchanged.
+  Add four behavior regressions for query serialization, recipient parsing,
+  recovery-mail serialization and valid/corrupt compressed HTTP bodies.
+- Make the wooden table rim flush with the felt across all five table shapes,
+  preserving its outer bevel, rail width, wood choices and underside. This is the
+  previously merged stable bugfix; refresh browsers to receive it.
 
 ### Changed
-- Make the wooden table rim flush with the felt across all five table shapes and
-  every room environment, following the approved profile. Keep the outer bevel,
-  wood choices, rail width and underside; remove the inward overlap to avoid
-  coplanar flickering. Reuse the shared rim geometry and existing resize lifecycle.
-  Client refresh only; no server restart or migration is needed.
-  `npm run check` passes all 1,229 tests; an isolated browser render verifies all
-  five shapes. In-app room/device smoke testing remains manual.
+- Keep stable releases on `main` and next-release integration on `dev`. Run CI on
+  both branches and reuse the full suite before stable image publication. Require
+  stable version tags whose commits belong to `main`.
 
 ## [0.23.0] — 2026-10-17
 
@@ -2214,7 +2221,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.23.1...HEAD
+[0.23.1]: https://github.com/optimuspryne/open-tabletop/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.0...v0.21.1

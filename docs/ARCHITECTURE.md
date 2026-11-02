@@ -24,6 +24,12 @@ native provisioning. CI also tests the built Alpine image; newer distro runtimes
 remain possible but require deployment verification. Native updates validate the
 service runtime before backup or release activation; they do not install a new Node version.
 
+Stable patch 0.23.1 promotes only the production dependency fix and the existing
+stable table-rim correction. Server/browser ownership, schema migrations (through
+027), bundled model catalog and room choices retain the 0.23.0 stable boundary.
+The additional development themes and migrations 028–030 are outside this release.
+See [0.23.1 upgrade notes](RELEASING.md#upgrading-to-0231).
+
 Prepared release 0.23.0 keeps the server/browser ownership and single-instance
 boundaries. Node 24+ and the coordinated Colyseus 0.18 server/browser pair require
 an app restart and client refresh. Additive migrations 024–027 persist room style
@@ -794,11 +800,14 @@ importing a room singleton:
 
 ## Trust and failure boundaries
 
-The HTTP dependency tree uses a targeted npm override for `qs@6.16.0` to address
-the array-limit bypass and stringification denial-of-service advisories
-GHSA-x5fp-wj9c-mxmx and GHSA-4mjr-xmp4-gh2g. The lockfile records the patched
-resolution without changing the Express/body-parser versions. This override should
-be reassessed when their normal dependency ranges admit a patched `qs` release.
+The HTTP dependency tree retains its targeted override at `qs@6.16.1`, covering
+the earlier array-limit/stringification advisories and GHSA-6pq8-jhm2-2vcw.
+Express remains 4.22.3; body-parser is locked to 1.20.9 for GHSA-27r3-jxmh-p828
+(compressed-request trailing-byte denial of service). The recovery-mail adapter
+uses Nodemailer 10.2.1 with a `^10.2.1` minimum for the reported recipient-parser
+advisories. HTTP, permissions, SMTP/TLS, CSP and shared-state contracts are preserved.
+Reassess the explicit qs resolution at the next HTTP dependency update. Scope and
+verification are in the [dependency inventory](DEPENDENCY_INVENTORY.md#production-audit-fix--2026-11-02).
 
 Every payload-bearing Colyseus message crosses `server/message-validation.js`
 before authorization, lookup, physics, state, or database work. Normalizers accept
