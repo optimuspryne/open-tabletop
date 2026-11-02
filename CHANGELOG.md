@@ -8,6 +8,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+- Separate stable releases on `main` from next-release integration on `dev`.
+  Run CI on both branches and reuse the full CI suite before publishing a release.
+  Require stable `vX.Y.Z` tags whose commits belong to `main`; development-only
+  commits and prerelease tags cannot update published images or Docker `latest`.
+  Document feature branches, release promotion and hotfix synchronization.
+
 ### Changed
 - Make the wooden table rim flush with the felt across all five table shapes and
   every room environment, following the approved profile. Keep the outer bevel,

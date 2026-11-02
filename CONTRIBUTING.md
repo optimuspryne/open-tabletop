@@ -37,6 +37,25 @@ tokens, private card data, or other sensitive information in reports.
 
 Report suspected vulnerabilities privately using [SECURITY.md](SECURITY.md).
 
+## Branch workflow
+
+`main` is the stable release line; `dev` integrates the next release. Start normal
+feature and fix branches from `dev`, and target pull requests to `dev`:
+
+```sh
+git fetch origin
+git switch dev
+git pull --ff-only origin dev
+git switch -c codex/describe-your-change
+```
+
+Use a clean working tree or a separate worktree when switching between development
+and stable work. Test the integrated changes on `dev` before promoting them to
+`main`. Urgent fixes for a released version branch from `main`, target `main`, and
+merge back into `dev` after release. See [Releasing](docs/RELEASING.md#branch-workflow)
+for promotion, tagging and synchronization. Publishing or pushing requires explicit
+maintainer authorization; preparing or committing changes locally does not.
+
 ## Local development
 
 Fork and clone the repository, then install dependencies:

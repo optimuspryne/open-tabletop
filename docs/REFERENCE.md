@@ -3,6 +3,16 @@
 A map of every module, data structure, and key function. For the _why_, see
 `ARCHITECTURE.md`; this is the _what_ — the API surface.
 
+The [branch workflow](RELEASING.md#branch-workflow) defines `dev` integration and
+stable `main` promotion. `.github/workflows/ci.yml` runs on pushes to both branches,
+pull requests and `workflow_call`. `.github/workflows/release.yml` calls
+`scripts/verify-release.sh` with full Git history to require a strict `vX.Y.Z` tag
+and a checked-out commit reachable from `origin/main`, then reuses the full CI
+workflow before its publishing job. Existing package-version and changelog checks
+still apply. `test/release-source.js` exercises the guard using temporary Git
+repositories, including unmerged development commits, promotion, invalid tags and
+missing main history. Only stable releases publish images and update `latest`.
+
 For declared/locked npm versions, vendored browser artifacts, native/tooling and
 container/CI baselines, see the [dependency inventory](DEPENDENCY_INVENTORY.md).
 The [maintenance plan](MAINTENANCE_PLAN.md) defines review and release checks; the

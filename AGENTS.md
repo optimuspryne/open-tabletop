@@ -12,6 +12,10 @@
 
 # Coding workflow
 
+- Keep `main` stable and use `dev` for next-release integration. Start normal feature/fix
+  branches from `dev` and target pull requests to `dev`; promote tested releases to `main`.
+  Start urgent release fixes from `main` and merge them back into `dev` after release.
+  Tag stable releases only on `main`; see [RELEASING.md](docs/RELEASING.md).
 - Commits are allowed without additional approval. Never push without explicit user approval;
   the user wants to test changes thoroughly before pushing.
 - Inspect the working tree before editing or committing. Preserve unrelated user and other-task

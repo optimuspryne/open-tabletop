@@ -220,10 +220,42 @@ The decorative doors do not introduce navigation or colliders. The validated Ble
 sources, lossless asset manifests and user-approved room/rear-wall appearances are
 recorded in [the room plan](PLAN_ROOM_THEMES.md).
 
+## Branch workflow
+
+- **`main`** is the stable release line and remains the default branch for clones.
+- **`dev`** integrates features and fixes for the next release. It may contain work
+  that has passed automated checks but still needs manual testing.
+- **`codex/*`** branches normally start from `dev` and merge back through pull
+  requests targeting `dev`. Keep unrelated features separate.
+
+Before a release, complete the relevant automated checks and manual acceptance on
+`dev`, including multiplayer, deployment and device checks affected by the changes.
+Prepare the version and changelog there, then promote `dev` to `main` through a pull
+request. Prefer a merge commit or fast-forward promotion rather than squashing the
+entire development history, so subsequent promotions retain their shared ancestry.
+After promotion, merge `main` back into `dev` to bring over release or hotfix commits.
+
+For an urgent fix while `dev` contains unfinished features, branch from `main`, test
+and merge the focused fix into `main`, then tag a patch release. Merge `main` back
+into `dev` so future releases retain the fix. Do not bring unfinished `dev` changes
+into an urgent stable release.
+
+Use clean working trees or separate worktrees for stable and development work.
+Protect `main` on GitHub with required checks and pull requests when configuring
+repository rules; a branch name alone does not enforce the policy. Repository rules
+and remote branch creation require separate hosted setup. The initial local split
+preserves existing main history and published tags; it does not rewrite a release
+or commit unrelated work in progress. Pushes and publication require explicit
+maintainer authorization.
+
 ## Cutting a release
 
-Pushing a `vX.Y.Z` tag triggers **`.github/workflows/release.yml`**, which does the build,
-the image push, and the GitHub release for you. So the whole hand process is now just:
+Pushing a `vX.Y.Z` tag triggers **`.github/workflows/release.yml`**. It rejects
+prerelease/malformed version tags and commits not reachable from `origin/main`,
+then calls the existing full CI workflow for the tagged commit. Image publishing
+and GitHub release creation wait for all CI jobs to pass. Development branch pushes
+do not publish images. Prerelease publication is not configured; prerelease tags
+cannot update `latest`.
 
 1. **Update the changelog.** Move everything under `## [Unreleased]` in `CHANGELOG.md`
    into a new `## [X.Y.Z] — YYYY-MM-DD` section, and refresh the compare/release links
@@ -234,14 +266,23 @@ the image push, and the GitHub release for you. So the whole hand process is now
    tag in `docker-compose.yml`'s commented `image:` line (+ all `README.md` image references)
    to `:X.Y.Z`. The workflow **fails** if `package.json` doesn't match the tag, catching a
    forgotten bump.
-3. **Commit + tag + push.**
+3. **Commit and promote.** Commit only the release-related files on `dev` and
+   obtain maintainer approval before pushing. Complete testing and merge the
+   release pull request from `dev` into `main`. Wait for main CI to pass.
+4. **Tag main and publish, with explicit maintainer approval.** In a clean working
+   tree, update local `main` to the promoted remote commit, then push only the new
+   release tag:
    ```bash
-   git commit -am "Release X.Y.Z"
+   git fetch origin
+   git switch main
+   git pull --ff-only origin main
    git tag -a vX.Y.Z -m "Open Tabletop X.Y.Z"
-   git push && git push --tags
+   git push origin vX.Y.Z
    ```
+   Never replace a published version tag. After release, merge `main` back into
+   `dev` and continue development there.
 
-That's it. The workflow then builds the multi-arch image, pushes
+After source validation and the full CI suite pass, the workflow builds the multi-arch image, pushes
 `optimuspryne/open-tabletop:X.Y.Z` **and** `:latest`, and creates the GitHub release from the
 tag with the changelog section as its notes. (Custom Postgres image is retired — one app image
 only; deployments run stock `postgres` and the app migrates its own schema, see **Migrations**.)
@@ -257,7 +298,14 @@ variables → Actions**:
   the repository. Use a token, not your password.
 
 `.github/workflows/ci.yml` runs `npm run check`, browser input/component suites, the production
-dependency audit and PostgreSQL integration tests on pushes to `main` and pull requests.
+dependency audit, PostgreSQL/multiplayer integration tests and production-image smoke tests
+on pushes to `main` and `dev`, and on pull requests. Its `workflow_call` entry point
+lets releases run the same jobs against the tagged commit without duplicating tests.
+The release workflow checks out full history for `scripts/verify-release.sh`;
+missing `origin/main` history fails closed. Only the publishing job receives
+`contents: write` and Docker publishing credentials. Hosted execution remains to
+be verified after an approved push; local validation does not establish hosted CI
+or branch protection.
 
 ## Migrations
 

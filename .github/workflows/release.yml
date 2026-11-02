@@ -1,7 +1,7 @@
 name: Release
 
-# Cut a release by pushing a version tag:  git tag -a v0.8.0 -m "…" && git push --tags
-# This workflow then: verifies the tag matches package.json, builds + pushes the multi-arch
+# Cut a release by tagging a tested commit promoted from dev to main.
+# This workflow verifies stable main ancestry, runs CI, checks package.json, builds + pushes the multi-arch
 # image (:X.Y.Z and :latest), and creates the GitHub Release with that version's CHANGELOG
 # section as the notes. So the whole manual process becomes "bump, commit, tag, push".
 #
@@ -13,11 +13,28 @@ on:
     tags: ['v*']
 
 permissions:
-  contents: write        # needed to create the GitHub Release
+  contents: read
 
 jobs:
-  release:
+  verify-source:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require a stable version tag on main
+        run: bash scripts/verify-release.sh
+
+  ci:
+    needs: verify-source
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    needs: [verify-source, ci]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # needed to create the GitHub Release
     steps:
       - uses: actions/checkout@v4
         with:

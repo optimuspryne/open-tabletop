@@ -3,6 +3,14 @@
 A web-based, physics-driven tabletop where any game can be played, because the
 engine only ever simulates _physical objects_ and lets humans enforce the rules.
 
+Development integrates on `dev`; `main` is the stable release line. Feature branches
+normally target `dev`, tested releases promote to `main`, and urgent stable fixes
+merge back into `dev`. CI runs on both branches and pull requests. Stable tag
+publication first verifies main ancestry and then calls the existing full CI
+workflow for that exact commit before accessing publishing credentials. Development
+and prerelease tags cannot publish versioned images or update Docker `latest`.
+See the [branch and release workflow](RELEASING.md#branch-workflow).
+
 Dependency ownership and update boundaries are recorded in the
 [inventory](DEPENDENCY_INVENTORY.md) and [maintenance plan](MAINTENANCE_PLAN.md).
 Runtime npm packages, vendored browser libraries and offline authoring tools have
