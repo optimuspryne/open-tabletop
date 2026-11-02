@@ -2481,7 +2481,7 @@ The read query explicitly selects `table_shape` and `table_rim_wood`, mapped to
 even when `scene` is null; a saved scene is not required to restore them. Missing
 values retain the existing `rect` and `mahogany` defaults. PostgreSQL regression
 coverage saves and reloads a hex table with a walnut rim and no scene snapshot.
-`room_environment` maps to the shared `environment` (`standard`, `cozy`, `poker-night` or `medieval-tavern`, default
+`room_environment` maps to the shared `environment` (`standard`, `cozy`, `poker-night`, `medieval-tavern` or `modern-bar`, default
 Standard); `room_lighting` maps to independently saved `lighting`. Migration 024
 adds the checked environment column; migration 025 extends the whitelist for
 Poker Night without changing stored choices. Separate-room and fresh-connection integration
@@ -3347,6 +3347,56 @@ canonical URLs and runtime owners are unchanged; this correction needs only a
 client hard refresh, with no additional migration or restart.
 See [approval and verification](PLAN_ROOM_THEMES.md#modern-bar-integration) and
 [detail correction](PLAN_ROOM_THEMES.md#modern-bar-chair-and-pendant-correction).
+`rooms/speakeasy-theme.js` registers `1920s-speakeasy` / **1920s Speakeasy**
+from the approved v4 source (SHA-256
+`258e96c3c6cac4f341b0f8224f34b935494b92522138675f6d53e9e3dea0fe5d`).
+Eight material-batched GLBs use the existing assembly, occupied seating, phone
+preparation, cutaways and cleanup. North bench/bar/fans and south console/art/fans/
+door follow their walls; two satin pendants and ceiling canopies follow the roof.
+The chair export faces +Z; its model slot applies a half-turn so the backrest
+sits outward and the open seat faces the table. Chair feet are grounded, the
+approved piping contour is retained, and the rug
+adapts to table extents. Decorative wood supports connect the floor to
+`TABLE_FINISH.rimBase` within the shared outline. Review table, cameras, lights
+and fixed six-chair roster are excluded. The existing shared gray pup remains.
+Selecting the theme preserves table/lighting/sky; **Use matching table** explicitly
+applies Walnut / burgundy `#493745` through existing messages. Additive migration
+`028_speakeasy.sql` extends the whitelist; apply through the migration role,
+restart and refresh. See [integration and checks](PLAN_ROOM_THEMES.md#speakeasy-runtime-integration--october-19-2026).
+
+`rooms/ancient-temple-theme.js` registers `ancient-temple` / **Ancient Temple**
+from the approved smooth v2 source, SHA-256
+`f9d44c0b6ebab77ae916a7584c0c182a4b422b97b1aecd267c1d5eb2831714fc`.
+Eight material-batched GLBs cover a reusable stone seat, one column placed four
+times, one brazier placed twice, relief, console, door, opening frame and paver.
+`buildPaving` repeats the authored smooth bevel in at most 32×32 instances,
+sharing source geometry/materials through the existing assembly resource owner.
+Paving extents adapt; columns retain their alignment with the fixed loggia frame.
+Column shaft derivatives use an even cylindrical stone UV wrap with a rear seam;
+geometry, smooth normals and source materials remain unchanged.
+The actual sky is visible through the opening: the blue panel and review foliage
+are excluded. North columns/braziers/frame, west relief and south console/door
+inherit wall cutaways; the roof follows the existing overhead cutaway. Stone
+seats receive a local half-turn and follow occupied presence. The shared pup is
+reused. Stone trestles meet the actual tabletop underside within the shared outline;
+the existing playable table remains authoritative. Explicit matching uses Oak /
+olive felt `#655f4d`; selection preserves table, sky and lighting. Apply additive
+migration `029_ancient_temple.sql` through the migration role, restart and refresh.
+See [runtime views, file inventory and checks](PLAN_ROOM_THEMES.md#ancient-temple-runtime-integration--october-19-2026).
+
+The nine remaining themes are registered through static `remaining-room-themes.js`
+configurations and `createAuthoredRoomTheme` in `authored-room-theme.js`. Its common
+adapter reuses collection ownership, assembly/model loading, occupied seating,
+cutaways, phone materials and cleanup. Native wall dressing stays rigid; the
+shell/structural roof and Conservatory side frames follow room bounds. Fixtures remain separate from roof
+scaling. `buildRoomPaving` in `room-paving.js` shares the unchanged Temple instance
+recipe with Conservatory; the latter has 28 units of room clearance for full
+foliage bounds and opaque backing under floor joints. Victorian's east desk is
+inset 1.19 units and its derivative clock lowered 0.06m to meet the mantel.
+Migration **030** permits all **16** public IDs while preserving previous values
+and the Standard default. No new runtime light, input or physics owner is added.
+See [all current IDs, matches and views](ROOM_THEME_RUNTIME_REVIEW.md).
+
 Production client code uses `createRoomBackdrop` from `rooms/room-backdrop.js`
 to follow the server-owned `environment`, resolve `rooms/room-themes.js` and switch
 `createRoomEnvironment` instances with cleanup. Cozy's six
@@ -3355,6 +3405,23 @@ model preparation and occupied seating live in `room-assembly.js` and
 `room-seating.js`. [ROOM_THEMES.md](ROOM_THEMES.md) documents the component contract,
 named anchors, resource ownership, optional parts and independent matching table.
 The existing APIs and appearance described below remain compatible.
+
+`rooms/room-companion.js` exports `ROOM_COMPANION`, `ROOM_COMPANION_ASSETS` and
+`buildRoomCompanion({THREE,layout,assembly})`. Each furnished theme registers the
+shared `pup` asset at `/models/environments/shared/gray-pup-in-bed.glb`, scaled by
+seven; Cozy retains the URL in `COZY_ROOM.furnitureURLs` as well. The shared room
+owner builds one `Resting gray dog` group at
+`[-layout.rx + 3.6, layout.floor, layout.rz - 3.7]`, yaw `3π/4`, facing inward.
+The original bed is approximately 0.6314 × 0.5478 m and the dog/bed is 0.2849 m tall.
+A rounded procedural bed remains if the optional model fails; the ordinary
+furnishing callback hides it once the model arrives. Contact shadows share the
+room assembly. Phone materials/shadows, picking exclusions, late callbacks,
+rebuilds and disposal follow the existing lifecycle. Standard stays skybox-only.
+The approved master remains in companion `pup_in_bed_v2/`; its separate
+`pup_room_integration_v1/` derivative retains every fur strand as a tapered ribbon, reduces skin detail and batches
+materials before the canonical lossless publisher. Runtime geometry has 227,104
+triangles, 14 primitives and no external textures. Refresh clients; no restart or
+migration is required. See [room companion integration](PLAN_ROOM_THEMES.md#resting-gray-room-companion).
 
 Approved ceiling authoring source: companion
 `Open-Tabletop_Asset_Builders/3d_models/original/cozy_ceiling_v1/` contains
@@ -3383,7 +3450,7 @@ Refresh clients after updating; no server restart/migration is needed.
 
 Select **Room Settings → Table Size & Color → Room style → Cozy game room**.
 The public schema field `State.environment` defaults to `standard`. The guarded
-`roomEnvironment {environment: 'standard'|'cozy'|'poker-night'|'medieval-tavern'}` message requires the existing
+`roomEnvironment {environment: 'standard'|'cozy'|'poker-night'|'medieval-tavern'|'modern-bar'}` message requires the existing
 GM/owner gameplay access, rejects malformed/extra fields and unknown IDs, and
 ignores unchanged values. Save/load uses `rooms.room_environment` through the
 existing ordered/debounced save path; migration `024_room_environment.sql` adds a
@@ -3394,9 +3461,9 @@ provides the canonical options/normalizer without importing browser assets.
 Apply migration 024 through the configured migration role, restart the server and
 refresh browsers. Fresh installs include it in the flattened schema baseline.
 
-All **132** bundled GLBs now ship in their lossless form at canonical
+All **215** bundled GLBs now ship in their lossless form at canonical
 URLs, including `cozy-game-shelf.glb` (7,485,328 bytes). Total GLBs are
-**89,086,064 bytes**, versus 140,319,296 before compression (36.5% smaller before
+**161,498,564 bytes**, versus 265,712,232 before compression (39.2% smaller before
 HTTP encoding). Duplicate originals and temporary `models/lossless/` and
 `-lossless.glb` paths were removed at the owner's request, reclaiming 100.12 MB
 from the comparison install. Authoring sources remain in the separate asset
@@ -4339,3 +4406,31 @@ add no interaction, collider, server state or runtime light. Selected sky/lighti
 existing source materials and previous curtain/chair/window corrections remain.
 This addition needs only a client refresh, with no extra migration/restart. See
 [approved integration and verification](PLAN_ROOM_THEMES.md#rear-wall-integration).
+
+
+## Pending room-theme art review — October 17, 2026
+
+The [remaining-theme review](ROOM_THEME_REVIEW.md) provides eleven editable Blender
+asset studies and room/seated/reverse views in an offline gallery. These proposals
+are not registered room IDs or runtime GLBs. The public selection contract and
+current model catalog are unchanged by this review slice. Speakeasy v4, Ancient
+Temple v2 and Cyberpunk v3 received owner approval October 18; Conservatory and
+Japanese v2 were approved October 19. The six remaining designs have smooth
+shading and supported lighting revisions ready for review, alongside the Japanese
+v3 ceiling refinement. For all eleven, optimized export, table/sky/lighting
+adaptation and device verification remain pending.
+No migration, restart or client refresh is required to view the gallery.
+
+
+Subsequent October 19 implementation: all eleven reviewed themes are now integrated
+locally. The earlier authoring-only statements above describe that review slice;
+current registrations and verification are documented in
+[the runtime review](ROOM_THEME_RUNTIME_REVIEW.md).
+
+## Local room asset organization (October 19, 2026)
+
+The eleven reviewed room source packages now live in companion `3d_models/rooms/<theme-id>/`: final native sources, raw publisher inputs, exact installed runtime copies, derivative textures, previews and provenance. Shared export/capture/publish tools live in `rooms/_shared/`; individual Speakeasy/Temple tools live with those themes. Re-export checks never replace preserved final binaries. The cleanup manifest and verifier record hashes; old revision paths elsewhere in historical records are retired. [Open the final-room index](../../Open-Tabletop_Asset_Builders/3d_models/rooms/README.md).
+
+### Earlier room sources relocated (October 19, 2026)
+
+Cozy, Poker Night, Medieval Tavern and Modern Bar now share the same companion `3d_models/rooms/<theme-id>/` organization as the eleven newer themes. Their final furnishings, corrected windows/lighting, ceiling and rear-wall sources are together, with original publisher inputs, runtime copies, maps and review/provenance records. The accepted gray pup master and scenery derivative live once under `rooms/_shared/gray-pup-in-bed/`. Original owner sources and approval inputs are retained; superseded drafts, backups, redundant ZIP bundles and unused compression candidates were removed. Old package names elsewhere in dated records describe history. [Current source index](../../Open-Tabletop_Asset_Builders/3d_models/rooms/README.md). The app model files/manifest/registry are unchanged.

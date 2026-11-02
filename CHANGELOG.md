@@ -14,7 +14,98 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   commits and prerelease tags cannot update published images or Docker `latest`.
   Document feature branches, release promotion and hotfix synchronization.
 
+- Consolidate the earlier Cozy, Poker Night, Medieval Tavern and Modern Bar authoring packages and shared gray pup into the final room asset folder; preserve final/owner sources and exports, relocate existing export tools, and remove superseded drafts, duplicate delivery archives and unused compression experiments.
+
+- Consolidate the eleven reviewed local room asset packages into theme subfolders; retain final native sources, raw/optimized exports, textures, previews and provenance, and remove superseded drafts/backups. Retarget offline tools and documentation links; installed runtime assets remain byte-identical.
+
+### Fixed
+- Correct Ancient Temple column shaft UVs so the stone texture has even scale
+  around and along each column. Geometry, smooth normals and stone maps are
+  preserved. Hard-refresh clients; no migration or server restart is needed.
+
+### Added
+- Integrate the remaining nine reviewed room themes: Starship Lounge, Victorian
+  Study, Mountain Cabin, Pirate Captain's Cabin, Wizard's Workshop, Cyberpunk
+  Back Room, Japanese Game Café, Garden Conservatory and Orbital Observation Deck.
+  Add 66 optimized models through shared wall/roof/seating/resource owners,
+  preserving polished lighting, smooth shading, botanical variety and saved
+  table/sky/lighting. Apply migration `030_remaining_room_themes.sql`, restart
+  and hard-refresh. See `docs/ROOM_THEME_RUNTIME_REVIEW.md` for all runtime views.
+- Integrate the approved **Ancient Temple** as a saved room style, with smooth
+  stone seats, monumental columns, bronze braziers, relief, rear console/door,
+  a clear loggia opening and bounded instanced stone paving. Eight optimized
+  Blender derivatives use the existing room/seating/cutaway/device/resource
+  owners and shared pup. Explicit matching applies Oak / olive felt `#655f4d`.
+  Apply migration `029_ancient_temple.sql`, restart and refresh clients. See
+  `docs/PLAN_ROOM_THEMES.md` for runtime views and verification.
+- Integrate the approved **1920s Speakeasy** as a saved room style with eight
+  optimized Blender models: fitted velvet chairs, scalloped bench, brass bar,
+  rear console/art/fans, door, north fans, connected satin pendants and bordered rug.
+  Reuse occupied seating, cutaways, phone policy, shared companion and cleanup.
+  Optional matching applies Walnut / burgundy `#493745`; selection preserves the
+  current table and lighting. Apply migration `028_speakeasy.sql`, restart and
+  refresh clients. See `docs/PLAN_ROOM_THEMES.md` for checks and runtime captures.
+- Prepare editable Blender assets and room/seated/reverse mockups for all eleven
+  remaining room themes, plus close-up asset boards, a review gallery, palettes and asset
+  inventories. See `docs/ROOM_THEME_REVIEW.md`. Speakeasy v4, Ancient Temple v2,
+  Cyberpunk v3, Conservatory v2 and Japanese Game Café v2 are approved; the other
+  six designs await owner approval. This slice adds no runtime theme, published model, migration or app control.
+- Add the approved gray pup resting in her blue bed to the open front-left corner
+  of Cozy, Poker Night, Medieval Tavern and Modern Bar, facing the table. Reuse
+  room sizing, furnishing loads, contact shadows, device policy and cleanup;
+  Standard remains skybox-only. Bundle one shared 4,765,964-byte scenery model
+  while preserving the detailed Blender master. Refresh clients; no server
+  restart or migration is needed.
+  All 1,233 code tests, 133 model checks, full desktop/touch components and
+  four-room render checks pass. Real-device performance and owner smoke testing
+  remain manual.
+- Revise the standalone dog asset as an all-gray reclining terrier in
+  `3d_models/original/pup_in_bed_v2/` in the companion asset workspace. Use smaller
+  eyes, a longer muzzle, continuous anatomy and fine fur grown from the evaluated
+  skin, including the ears. Preserve the seated v1 model for comparison.
+  The owner approved the four-room corner previews in companion
+  `pup_room_integration_v1/`; that pack also retains the runtime derivative and checks.
+- Create a standalone photo-inspired terrier sitting in a slate-blue dog bed,
+  with editable Blender source, mesh fur, a portable GLB and a rendered preview in
+  the companion asset workspace's `3d_models/original/pup_in_bed_v1/` directory.
+  This is an asset for review; it is not registered in the app or bundled model catalog.
+
 ### Changed
+- Correct the Speakeasy chair model's reversed orientation with a half-turn at
+  placement. Verify the actual backrest geometry at all eight seats across table
+  shapes on desktop/touch, and refresh the runtime review images. Client refresh
+  only; no model replacement, migration or server restart for this correction.
+- Record Conservatory and Japanese room v2 approval. Smooth the six remaining
+  room studies and refine rounded components; connect eight pendant stems/cords
+  to ceilings or beams beneath conical covers, including Japanese v3. Replace
+  Wizard/Victorian pendants with wall lanterns and frosted brass sconces; mount
+  the floating Wizard and Pirate lanterns on wall brackets. Preserve the owner's
+  unsaved Wizard scene and provide separate native sources and review renders.
+- Revise Conservatory and Japanese room mockups with curved botanical foliage
+  and distinct plant forms. Move the Conservatory fern clear of the desk;
+  connect every Japanese chair's wishbone to the seat frame and curved back rail.
+  Smooth all mesh parts and refine round chair geometry. Provide separate v2
+  sources and seated/reverse/detail views for owner review; no runtime integration.
+- Complete Cyberpunk's two pipe stubs with additional 90-degree bends upward
+  into the ceiling, with union sleeves and ceiling collars. Preserve the approved
+  fluorescent fixture. Record Ancient Temple v2 approval and Cyberpunk v3 approval
+  after the requested pipe condition is fulfilled; provide separate source and
+  corner/room renders. Runtime integration remains pending.
+- Record owner approval of the Speakeasy v4 design. Revise Ancient Temple with
+  smooth mesh shading and finer bevels; replace Cyberpunk's center pendants with
+  a suspended twin-tube fluorescent fixture. Provide separate v2 sources and
+  close-up renders. Exterior views remain illustrative; runtime integration is pending.
+- Fit the Speakeasy chair piping to the actual beveled cushion contours on all
+  six chairs, preserving seam height, cord size and finish. Provide a separate
+  v4 source and corner close-ups for review.
+- Smooth every chair and bench mesh in the Speakeasy mockup and extend both
+  pendant stems to the ceiling with conical metal canopies. Preserve the
+  accepted rear-wall arrangement and existing shade height; provide separate
+  v3 editable source and detail renders for review.
+- Revise the Speakeasy rear-wall mockup so two smaller brass fans flank the
+  artwork, clear of its frame and the door. Preserve the open unsaved Blender
+  scene and v1 source; provide separate v2 source and review images. The revised
+  design awaits approval and is not integrated into the game.
 - Make the wooden table rim flush with the felt across all five table shapes and
   every room environment, following the approved profile. Keep the outer bevel,
   wood choices, rail width and underside; remove the inward overlap to avoid

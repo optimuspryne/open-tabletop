@@ -65,7 +65,7 @@ CREATE TABLE rooms (
   scene             jsonb,      -- GM's saved table snapshot (table size + pieces + transforms); null = none
   scale             jsonb,      -- durable per-room measurement scale { worldPerUnit, unitLabel, roundStep, cellWorld, gridStyle }; null = defaults
   room_lighting     jsonb       NOT NULL DEFAULT '{"preset":"neutral","azimuth":130,"elevation":55,"keyIntensity":1,"keyColor":"#ffffff","ambientIntensity":1,"ambientColor":"#ffffff","shadowSoftness":0.55}'::jsonb,
-  room_environment  text        NOT NULL DEFAULT 'standard' CHECK (room_environment IN ('standard', 'cozy', 'poker-night', 'medieval-tavern', 'modern-bar')),
+  room_environment  text        NOT NULL DEFAULT 'standard' CHECK (room_environment IN ('standard', 'cozy', 'poker-night', 'medieval-tavern', 'modern-bar', '1920s-speakeasy', 'ancient-temple', 'starship-lounge', 'victorian-study', 'mountain-cabin', 'pirate-captains-cabin', 'wizards-workshop', 'cyberpunk-back-room', 'japanese-game-cafe', 'garden-conservatory', 'orbital-observation-deck')),
   created_at        timestamptz NOT NULL DEFAULT now(),
   deleted_at        timestamptz
 );
@@ -281,6 +281,9 @@ INSERT INTO schema_migrations (version) VALUES
   ('016_room_lighting.sql'), ('017_collider_presets.sql'),
   ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql'), ('022_notecard_templates.sql'), ('023_account_recovery.sql'), ('024_room_environment.sql'), ('025_poker_night.sql'),
   ('026_medieval_tavern.sql'),
-  ('027_modern_bar.sql');
+  ('027_modern_bar.sql'),
+  ('028_speakeasy.sql'),
+  ('029_ancient_temple.sql'),
+  ('030_remaining_room_themes.sql');
 
 COMMIT;

@@ -116,8 +116,8 @@ test('Authored Tavern loads each kind once, retains sibling resources and releas
   const f = fixture(true, true),
     saved = state();
   f.backdrop.sync(saved);
-  assert.equal(f.requests.length, 8);
-  assert.equal(new Set(f.requests.map((r) => r.url)).size, 8);
+  assert.equal(f.requests.length, 9);
+  assert.equal(new Set(f.requests.map((r) => r.url)).size, 9);
   const disposed = new Map();
   for (const request of f.requests) {
     const model = new THREE.Group(),
@@ -159,7 +159,7 @@ test('Authored Tavern loads each kind once, retains sibling resources and releas
   f.backdrop.sync(saved);
   assert.equal(disposed.size, 0);
   f.backdrop.sync({ ...saved, environment: 'standard' });
-  assert.equal(disposed.size, 8);
+  assert.equal(disposed.size, 9);
   assert.ok([...disposed.values()].every((n) => n === 1));
   f.backdrop.sync(saved);
   const late = f.requests.at(-1);

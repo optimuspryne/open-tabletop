@@ -1,4 +1,5 @@
 import { wallOpeningPanels } from './wall-openings.js';
+import { ROOM_COMPANION_ASSETS } from './room-companion.js';
 import { createOakFloor, createPlasterPanel } from '../cozy-room-surfaces.js';
 import { tableOutline } from '../../../shared/pieces.js';
 import { TABLE_FINISH } from '../table-geometry.js';
@@ -386,8 +387,9 @@ export const MODERN_BAR_THEME = Object.freeze({
   furnishings: Object.freeze({ build: buildFurnishings }),
   decoration: Object.freeze({}),
   atmosphere: Object.freeze({ createMaterials, suggestedLighting: 'warm' }),
-  assets: Object.freeze(
-    Object.fromEntries(
+  assets: Object.freeze({
+    ...ROOM_COMPANION_ASSETS,
+    ...Object.fromEntries(
       [
         'chair',
         'stool',
@@ -412,7 +414,7 @@ export const MODERN_BAR_THEME = Object.freeze({
         }),
       ]),
     ),
-  ),
+  }),
   matchingTable: Object.freeze({
     rimWood: 'walnut',
     feltColor: '#294b4c',

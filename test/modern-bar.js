@@ -112,8 +112,8 @@ test('Authored Modern loads each kind once, retains sibling resources and releas
   const f = fixture(true, true),
     saved = state();
   f.backdrop.sync(saved);
-  assert.equal(f.requests.length, 13);
-  assert.equal(new Set(f.requests.map((r) => r.url)).size, 13);
+  assert.equal(f.requests.length, 14);
+  assert.equal(new Set(f.requests.map((r) => r.url)).size, 14);
   const disposed = new Map();
   for (const request of f.requests) {
     const model = new THREE.Group(),
@@ -146,7 +146,7 @@ test('Authored Modern loads each kind once, retains sibling resources and releas
   f.backdrop.sync(saved);
   assert.equal(disposed.size, 0);
   f.backdrop.sync({ ...saved, environment: 'standard' });
-  assert.equal(disposed.size, 13);
+  assert.equal(disposed.size, 14);
   assert.ok([...disposed.values()].every((n) => n === 1));
   f.backdrop.sync(saved);
   const late = f.requests.at(-1);

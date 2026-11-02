@@ -210,6 +210,104 @@ async function prepareDatabase(ownerUrl) {
           .room_environment,
         'standard',
       );
+      const speakeasyMigration = await fs.readFile(
+        path.join(root, 'postgres/028_speakeasy.sql'),
+        'utf8',
+      );
+      await client.query(speakeasyMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['medieval-tavern', 'modern-bar', 'cozy', 'poker-night', 'standard'],
+      );
+      await client.query("UPDATE rooms SET room_environment = '1920s-speakeasy' WHERE id = 2");
+      await client.query(speakeasyMigration);
+      assert.deepEqual((await client.query('SELECT * FROM rooms WHERE id = 2')).rows, [
+        {
+          id: '2',
+          notes: 'standard notes',
+          table_rim_wood: 'oak',
+          room_environment: '1920s-speakeasy',
+        },
+      ]);
+      await client.query(
+        "INSERT INTO rooms (id, notes, table_rim_wood) VALUES (6, 'new after speakeasy', 'oak')",
+      );
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms WHERE id = 6')).rows[0]
+          .room_environment,
+        'standard',
+      );
+      const templeMigration = await fs.readFile(
+        path.join(root, 'postgres/029_ancient_temple.sql'),
+        'utf8',
+      );
+      await client.query(
+        "INSERT INTO rooms VALUES (8, 'modern before temple', 'walnut', 'modern-bar')",
+      );
+      await client.query(templeMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        [
+          'medieval-tavern',
+          '1920s-speakeasy',
+          'cozy',
+          'poker-night',
+          'standard',
+          'standard',
+          'modern-bar',
+        ],
+      );
+      await client.query("UPDATE rooms SET room_environment = 'ancient-temple' WHERE id = 6");
+      await client.query(templeMigration);
+      assert.deepEqual((await client.query('SELECT * FROM rooms WHERE id = 6')).rows, [
+        {
+          id: '6',
+          notes: 'new after speakeasy',
+          table_rim_wood: 'oak',
+          room_environment: 'ancient-temple',
+        },
+      ]);
+      await client.query(
+        "INSERT INTO rooms (id, notes, table_rim_wood) VALUES (7, 'new after temple', 'oak')",
+      );
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms WHERE id = 7')).rows[0]
+          .room_environment,
+        'standard',
+      );
+      const remainingMigration = await fs.readFile(
+        path.join(root, 'postgres/030_remaining_room_themes.sql'),
+        'utf8',
+      );
+      const beforeRemaining = (await client.query('SELECT * FROM rooms ORDER BY id')).rows;
+      await client.query(remainingMigration);
+      assert.deepEqual(
+        (await client.query('SELECT * FROM rooms ORDER BY id')).rows,
+        beforeRemaining,
+      );
+      for (const environment of [
+        'starship-lounge',
+        'victorian-study',
+        'mountain-cabin',
+        'pirate-captains-cabin',
+        'wizards-workshop',
+        'cyberpunk-back-room',
+        'japanese-game-cafe',
+        'garden-conservatory',
+        'orbital-observation-deck',
+      ]) {
+        await client.query('UPDATE rooms SET room_environment = $1 WHERE id = 7', [environment]);
+        await client.query(remainingMigration);
+        assert.equal(
+          (await client.query('SELECT room_environment FROM rooms WHERE id = 7')).rows[0]
+            .room_environment,
+          environment,
+        );
+      }
       await assert.rejects(
         client.query("UPDATE rooms SET room_environment = 'unknown'"),
         (error) => error.code === '23514',

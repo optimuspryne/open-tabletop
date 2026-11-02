@@ -1,3 +1,4 @@
+import { REMAINING_ROOM_THEMES } from '../public/rendering/rooms/remaining-room-themes.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../public/vendor/three/three.module.js';
@@ -348,6 +349,40 @@ test('Modern Bar matching uses the existing wood/felt messages without changing 
   assert.deepEqual(f.applied, []);
 });
 
+test('Speakeasy matching uses the existing wood/felt messages without changing shape or lighting', () => {
+  const f = fixture({ theme: getRoomTheme('1920s-speakeasy') });
+  f.settings.hydrate();
+  f.applied.length = 0;
+  f.byId('roomSettings').onclick();
+  assert.equal(f.byId('tableThemeName').textContent, '1920s Speakeasy');
+  assert.deepEqual(f.sent, []);
+  f.byId('tableThemeApply').onclick();
+  assert.deepEqual(f.sent, [
+    ['table', { rimWood: 'walnut' }],
+    ['tableColor', { color: '#493745' }],
+  ]);
+  assert.equal(f.state.tableShape, 'rect');
+  assert.equal(f.state.feltColor, '#123456');
+  assert.deepEqual(f.applied, []);
+});
+
+test('Ancient Temple matching uses the existing wood/felt messages without changing shape or lighting', () => {
+  const f = fixture({ theme: getRoomTheme('ancient-temple') });
+  f.settings.hydrate();
+  f.applied.length = 0;
+  f.byId('roomSettings').onclick();
+  assert.equal(f.byId('tableThemeName').textContent, 'Ancient Temple');
+  assert.deepEqual(f.sent, []);
+  f.byId('tableThemeApply').onclick();
+  assert.deepEqual(f.sent, [
+    ['table', { rimWood: 'oak' }],
+    ['tableColor', { color: '#655f4d' }],
+  ]);
+  assert.equal(f.state.tableShape, 'rect');
+  assert.equal(f.state.feltColor, '#123456');
+  assert.deepEqual(f.applied, []);
+});
+
 test('room style follows authoritative state, waits for patches and respects live permissions', () => {
   const f = fixture();
   const select = f.byId('roomEnvironment');
@@ -372,3 +407,21 @@ test('room style follows authoritative state, waits for patches and respects liv
   assert.equal(select.value, 'standard');
   assert.equal(f.byId('tableThemeMatch').hidden, true);
 });
+
+for (const theme of Object.values(REMAINING_ROOM_THEMES))
+  test(theme.name + ' matching preserves independent table, sky and lighting', () => {
+    const f = fixture({ theme });
+    f.settings.hydrate();
+    f.applied.length = 0;
+    const saved = structuredClone(f.state);
+    f.byId('roomSettings').onclick();
+    assert.equal(f.byId('tableThemeName').textContent, theme.name);
+    assert.deepEqual(f.sent, []);
+    f.byId('tableThemeApply').onclick();
+    assert.deepEqual(f.sent, [
+      ['table', { rimWood: theme.matchingTable.rimWood }],
+      ['tableColor', { color: theme.matchingTable.feltColor }],
+    ]);
+    assert.deepEqual(f.state, saved);
+    assert.deepEqual(f.applied, []);
+  });

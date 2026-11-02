@@ -1,8 +1,8 @@
 # Bundled lossless GLBs
 
 The app ships one GLB per model, at the existing canonical `/models/...` URL.
-All 132 bundled GLBs use the approved lossless encoding: **89,086,064 bytes**,
-versus 140,319,296 bytes before compression (36.5% smaller before HTTP encoding).
+All 215 bundled GLBs use the approved lossless encoding: **161,498,564 bytes**,
+versus 265,712,232 bytes before compression (39.2% smaller before HTTP encoding).
 The extra uncompressed app copies and temporary `lossless/` / `-lossless.glb`
 paths have been removed at the owner's request. Blender sources and authoring
 exports remain in the separate asset workspace; they are not deployed.
@@ -95,3 +95,11 @@ The canonical publisher and pinned dependency lockfile are versioned under
 compression reports/studies remain in the separate authoring workspace.
 Do not rerun the earlier all-model batch workflow against already compressed app
 files. Use `publish.mjs` with the original authoring export for each replacement.
+
+## Local room asset organization (October 19, 2026)
+
+The eleven reviewed room packages are consolidated in companion `3d_models/rooms/`, with `source/`, `exports/{raw,runtime,textures}/`, `previews/`, `provenance/` and theme-specific or shared tools. Preserved raw files are the exact canonical publisher inputs; re-export float/tangent rounding can vary. See the package manifest and verifier for file integrity. [Open the final-room index](../../../../Open-Tabletop_Asset_Builders/3d_models/rooms/README.md).
+
+### Earlier room sources relocated (October 19, 2026)
+
+Cozy, Poker Night, Medieval Tavern and Modern Bar now share the same companion `3d_models/rooms/<theme-id>/` organization as the eleven newer themes. Their final furnishings, corrected windows/lighting, ceiling and rear-wall sources are together, with original publisher inputs, runtime copies, maps and review/provenance records. The accepted gray pup master and scenery derivative live once under `rooms/_shared/gray-pup-in-bed/`. Original owner sources and approval inputs are retained; superseded drafts, backups, redundant ZIP bundles and unused compression candidates were removed. Old package names elsewhere in dated records describe history. [Current source index](../../../../Open-Tabletop_Asset_Builders/3d_models/rooms/README.md). The app model files/manifest/registry are unchanged.

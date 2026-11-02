@@ -332,10 +332,23 @@ test('a completed save does not send privileged acknowledgment after participati
 
 test('only GMs and owners can change the room environment without changing table or scene', async () => {
   for (const [rank, environment] of [0, 1, 2, 3].flatMap((rank) =>
-    ['cozy', 'poker-night', 'medieval-tavern', 'modern-bar'].map((environment) => [
-      rank,
-      environment,
-    ]),
+    [
+      'cozy',
+      'poker-night',
+      'medieval-tavern',
+      'modern-bar',
+      '1920s-speakeasy',
+      'ancient-temple',
+      'starship-lounge',
+      'victorian-study',
+      'mountain-cabin',
+      'pirate-captains-cabin',
+      'wizards-workshop',
+      'cyberpunk-back-room',
+      'japanese-game-cafe',
+      'garden-conservatory',
+      'orbital-observation-deck',
+    ].map((environment) => [rank, environment]),
   )) {
     const { room, handlers, events } = harness({ rank });
     const original = structuredClone(room.state);

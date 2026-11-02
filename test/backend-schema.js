@@ -187,8 +187,19 @@ test('room style patches reach every viewer and late joins hydrate the current c
     'poker-night',
     'medieval-tavern',
     'modern-bar',
+    '1920s-speakeasy',
+    'ancient-temple',
+    'starship-lounge',
+    'victorian-study',
+    'mountain-cabin',
+    'pirate-captains-cabin',
+    'wizards-workshop',
+    'cyberpunk-back-room',
+    'japanese-game-cafe',
+    'garden-conservatory',
+    'orbital-observation-deck',
     'standard',
-    'modern-bar',
+    'ancient-temple',
   ]) {
     state.environment = environment;
     const patch = encoder.encode();
@@ -201,5 +212,5 @@ test('room style patches reach every viewer and late joins hydrate the current c
   }
   const lateJoin = Reflection.decode(Reflection.encode(encoder));
   lateJoin.decode(encoder.encodeAll());
-  assert.equal(lateJoin.state.environment, 'modern-bar');
+  assert.equal(lateJoin.state.environment, 'ancient-temple');
 });

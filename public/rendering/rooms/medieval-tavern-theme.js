@@ -1,4 +1,5 @@
 import { wallOpeningPanels } from './wall-openings.js';
+import { ROOM_COMPANION_ASSETS } from './room-companion.js';
 import { createOakFloor, createPlasterPanel } from '../cozy-room-surfaces.js';
 import { inTable, tableOutline } from '../../../shared/pieces.js';
 import { TABLE_FINISH } from '../table-geometry.js';
@@ -375,8 +376,9 @@ export const MEDIEVAL_TAVERN_THEME = Object.freeze({
   furnishings: Object.freeze({ build: buildFurnishings }),
   decoration: Object.freeze({}),
   atmosphere: Object.freeze({ createMaterials, suggestedLighting: 'warm' }),
-  assets: Object.freeze(
-    Object.fromEntries(
+  assets: Object.freeze({
+    ...ROOM_COMPANION_ASSETS,
+    ...Object.fromEntries(
       ['chair', 'stool', 'bench', 'barrel', 'hearth', 'window', 'bar', 'chandelier'].map((kind) => [
         kind,
         Object.freeze({
@@ -387,7 +389,7 @@ export const MEDIEVAL_TAVERN_THEME = Object.freeze({
         }),
       ]),
     ),
-  ),
+  }),
   matchingTable: Object.freeze({
     rimWood: 'oak',
     feltColor: '#354c36',

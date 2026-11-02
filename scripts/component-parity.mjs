@@ -1301,7 +1301,7 @@ const SCENES = [
         overlays: new Map(), trays: new Map(), scores: new Map(), unclaimed: new Map(),
         scale: { gridStyle: 'off', worldPerUnit: 1, unitLabel: 'ft', roundStep: 1, cellWorld: 1 },
         whiteboard: { enabled: false }, timer: { running: false, mode: 'up', base: 0, since: 0 },
-        environment: ['cozy','poker-night','medieval-tavern','modern-bar'].includes(new URLSearchParams(location.search).get('fixtureEnvironment'))?new URLSearchParams(location.search).get('fixtureEnvironment'):'standard',
+        environment: ['cozy','poker-night','medieval-tavern','modern-bar','1920s-speakeasy','ancient-temple','starship-lounge','victorian-study','mountain-cabin','pirate-captains-cabin','wizards-workshop','cyberpunk-back-room','japanese-game-cafe','garden-conservatory','orbital-observation-deck'].includes(new URLSearchParams(location.search).get('fixtureEnvironment'))?new URLSearchParams(location.search).get('fixtureEnvironment'):'standard',
         tableX: 40, tableZ: 28, tableShape: 'rectangle', roomName: 'Fixture table', skybox: '',
       };
       const room = { state: { ...state, pieces: undefined }, sessionId: 'me', reconnectionToken: 'fixture',
@@ -1341,6 +1341,21 @@ const SCENES = [
       await waitForVisualAssets();
       assert(clientTableMesh.castShadow&&clientTableMesh.receiveShadow,'The solid tabletop must block light as well as receive piece shadows');
       const scenery = () => clientScene.children.filter(node=>node.userData.roomTheme);
+      if(room.state.environment!=='standard'){
+        const {getRoomTheme}=await import('/rendering/rooms/room-themes.js');
+        const theme=getRoomTheme(room.state.environment),root=scenery()[0];
+        const companion=root.getObjectByName('Resting gray dog');
+        const dog=companion?.getObjectByName(theme.assets.pup.name);
+        assert(dog&&dog.scale.x===7,'Production bootstrap did not load the shared gray dog');
+        assert(companion.position.x===-root.userData.halfSize.x+3.6&&companion.position.z===root.userData.halfSize.z-3.7&&companion.position.y===theme.structure.floorY,'Dog lost its floor-relative open corner');
+        let dogBatches=0,dogTriangles=0;
+        dog.traverse(node=>{if(!node.isMesh)return;dogBatches++;dogTriangles+=(node.geometry.index?.count??node.geometry.attributes.position.count)/3;
+          const hits=[];node.raycast(null,hits);assert(!hits.length,'The dog intercepts gameplay picking');
+          if(clientDeviceClass()==='phone')assert(!node.castShadow&&!node.receiveShadow,'Dog bypassed phone shadow policy');
+        });
+        assert(dogBatches===14&&dogTriangles<250000,'Production dog bypassed the scenery export');
+        assert(performance.getEntriesByType('resource').some(entry=>new URL(entry.name).pathname===theme.assets.pup.url),'Production dog did not use its canonical bundled URL');
+      }
       if (room.state.environment==='cozy') {
         assert(scenery().length===1,'Shared state did not register the cozy room');
         assert(scenery()[0].userData.roomTheme==='cozy','Production bootstrap bypassed the room-theme runtime');
@@ -1474,7 +1489,7 @@ const SCENES = [
         assert(!scenery()[0].getObjectByName('South wall').visible,'Production loop did not update the outside-wall cutaway');
         assert(sent.length===beforeScene,'Camera cutaway sent gameplay messages');
         const select=byId('roomEnvironment');
-        assert(select.value==='cozy'&&select.options.length===5,'Room style choices did not hydrate');
+        assert(select.value==='cozy'&&select.options.length===16,'Room style choices did not hydrate');
         const beforeStyle=sent.length;
         select.value='standard';select.dispatchEvent(new Event('change'));
         assert(sent.at(-1)[0]==='roomEnvironment'&&sent.at(-1)[1].environment==='standard','Room style did not use its shared protocol');
@@ -1638,7 +1653,7 @@ const SCENES = [
         const THREE=await import('three');
         const {MODERN_BAR:fit,MODERN_BAR_THEME:theme}=await import('/rendering/rooms/modern-bar-theme.js');
         const kinds=Object.keys(theme.assets);
-        const ready=root=>kinds.every(kind=>root.getObjectByName('Modern '+kind+' model'));
+        const ready=root=>kinds.every(kind=>root.getObjectByName(theme.assets[kind].name));
         const modern=scenery()[0];
         assert(scenery().length===1&&modern.userData.roomTheme==='modern-bar','Modern Bar did not bootstrap');
         for(let i=0;i<400&&!ready(modern);i++)await new Promise(resolve=>setTimeout(resolve,25));
@@ -1740,6 +1755,224 @@ const SCENES = [
           });
         }
 
+      } else if (room.state.environment==='1920s-speakeasy') {
+        const THREE=await import('three');
+        const {SPEAKEASY:fit,SPEAKEASY_THEME:theme}=await import('/rendering/rooms/speakeasy-theme.js');
+        const ready=root=>Object.values(theme.assets).every(asset=>root.getObjectByName(asset.name));
+        const current=scenery()[0],lighting=JSON.stringify(clientGetLighting());
+        for(let i=0;i<400&&!ready(current);i++)await new Promise(resolve=>setTimeout(resolve,25));
+        assert(ready(current),'Approved Speakeasy models did not load');
+        byId('roomSettings').click();
+        assert(byId('roomEnvironment').value===theme.id&&byId('tableThemeName').textContent===theme.name,'Speakeasy settings did not hydrate');
+        assert(byId('roomEnvironment').options.length===16,'Speakeasy option missing');
+        const start=sent.length;byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:'walnut'}],['tableColor',{color:'#493745'}]]),'Speakeasy matching changed independent settings');
+        byId('roomSettingsClose').click();
+        const inspect=root=>{
+          root.updateWorldMatrix(true,true);
+          const ceiling=root.getObjectByName('Speakeasy ceiling');
+          const top=fit.floorY+fit.wallHeight;
+          const pendants=[];root.traverse(node=>{if(node.name==='Speakeasy pendant model')pendants.push(node)});
+          assert(pendants.length===2&&pendants.every(p=>p.parent.parent===ceiling),'Pendants lost ceiling cutaway ownership');
+          for(const pendant of pendants){
+            const bounds=new THREE.Box3().setFromObject(pendant);
+            assert(Math.abs(bounds.max.y-(top+.007))<.001,'Canopy does not meet ceiling');
+            assert(Math.abs(bounds.min.y-(top-6.44))<.001,'Pendant shade height changed');
+          }
+          const chairs=root.children.filter(n=>n.name==='Speakeasy occupied chair');
+          for(const chair of chairs){
+            const model=chair.getObjectByName('Speakeasy chair model');
+            assert(model,'Occupied chair did not reuse approved model');
+            const bounds=new THREE.Box3().setFromObject(model);
+            assert(Math.abs(bounds.min.y-fit.floorY)<.001,'Chair feet float above floor');
+            const back=new THREE.Vector3();let backVertices=0;
+            const toModel=model.matrixWorld.clone().invert();
+            model.traverse(node=>{
+              if(!node.isMesh||![node.material].flat().some(m=>m.name.includes('upholstery')))return;
+              const position=node.geometry.attributes.position;
+              for(let i=0;i<position.count;i++){
+                const world=new THREE.Vector3().fromBufferAttribute(position,i).applyMatrix4(node.matrixWorld);
+                if(world.clone().applyMatrix4(toModel).y>.75){back.add(world);backVertices++;}
+              }
+            });
+            const center=chair.getWorldPosition(new THREE.Vector3()),out=center.clone().setY(0).normalize();
+            assert(backVertices>0&&back.divideScalar(backVertices).sub(center).setY(0).dot(out)>0,'Actual Speakeasy backrest is between the seat and table at seat '+chair.userData.seat);
+          }
+          const south=root.getObjectByName('Speakeasy south wall'),door=root.getObjectByName('Speakeasy door model'),console=root.getObjectByName('Speakeasy console-wall model');
+          assert(door.parent.parent===south&&console.parent.parent===south,'Rear furnishings lost wall ownership');
+          assert(!new THREE.Box3().setFromObject(door).intersectsBox(new THREE.Box3().setFromObject(console)),'Rear fans clip the door');
+          root.traverse(node=>{if(node.isMesh){const hits=[];node.raycast(null,hits);assert(!hits.length,'Scenery intercepts picking');if(clientDeviceClass()==='phone')assert(!node.castShadow&&!node.receiveShadow&&[node.material].flat().every(m=>!m.normalMap&&!m.isMeshPhysicalMaterial),'Speakeasy bypassed phone policy');}assert(!node.isLight,'Speakeasy imported a review light');});
+        };
+        inspect(current);
+        const chair=current.getObjectByName('Speakeasy chair model'),toChair=chair.matrixWorld.clone().invert(),triangles=[],piping=[];
+        chair.traverse(node=>{
+          if(!node.isMesh)return;
+          const mat=[node.material].flat().map(m=>m.name).join(' '),matrix=toChair.clone().multiply(node.matrixWorld),position=node.geometry.attributes.position,index=node.geometry.index;
+          if(mat.includes('upholstery'))for(let i=0;i<(index?index.count:position.count);i+=3){const pts=[0,1,2].map(j=>new THREE.Vector3().fromBufferAttribute(position,index?index.getX(i+j):i+j).applyMatrix4(matrix));const triangle=new THREE.Triangle(...pts);if(pts.every(p=>p.y<.57)&&triangle.getArea()>1e-12)triangles.push(triangle);}
+          if(mat.includes('trim'))for(let i=0;i<position.count;i++){const p=new THREE.Vector3().fromBufferAttribute(position,i).applyMatrix4(matrix);if(p.y>.519&&p.y<.526)piping.push(p);}
+        });
+        assert(triangles.length&&piping.length>100,'Fitted piping regression did not find the seat seam');
+        const nearest=new THREE.Vector3();
+        for(let i=0;i<piping.length;i+=Math.max(1,Math.floor(piping.length/96))){let distance=Infinity;for(const triangle of triangles){triangle.closestPointToPoint(piping[i],nearest);distance=Math.min(distance,nearest.distanceTo(piping[i]));}assert(distance<.0033,'Chair piping detached from cushion at '+JSON.stringify(piping[i].toArray())+' distance '+distance+' triangles '+triangles.length);}
+        room.state.players.set('guest',{seat:2,participation:'player'});room.state.players.set('observer',{seat:4,participation:'spectator'});patches.forEach(fn=>fn(room.state));
+        assert(current.children.filter(n=>n.name==='Speakeasy occupied chair').length===2,'Speakeasy counted spectator or missed arrival');
+        for(let seat=0;seat<8;seat++)room.state.players.set('seat-'+seat,{seat,participation:'player'});
+        patches.forEach(fn=>fn(room.state));
+        assert(current.children.filter(n=>n.name==='Speakeasy occupied chair').length===8,'All eight Speakeasy seats must be checked');
+        inspect(current);
+        clientCamera.position.set(0,60,0);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!current.getObjectByName('Speakeasy ceiling').visible,'Overhead fixture cutaway failed');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&current.parent===null,'Speakeasy leaked on switch');
+        room.state.environment=theme.id;
+        for(const [shape,x,z] of [['rect',2,1.4],['round',12,7],['oval',40,15],['hex',80,2],['rect',2,80]]){
+          room.state.tableShape=shape;room.state.tableX=x;room.state.tableZ=z;patches.forEach(fn=>fn(room.state));
+          const root=scenery()[0];for(let i=0;i<400&&!ready(root);i++)await new Promise(resolve=>setTimeout(resolve,25));
+          assert(ready(root),'Resized Speakeasy models did not load');inspect(root);
+          const {tableOutline}=await import('/shared/pieces.js');const depth=Math.max(...tableOutline(shape,x,z).map(p=>Math.abs(p.z)));
+          const protectedArea=new THREE.Box3(new THREE.Vector3(-x-5.3,-10,-depth-5.3),new THREE.Vector3(x+5.3,10,depth+5.3));
+          root.traverse(node=>{if(['Speakeasy booth model','Speakeasy bar model','Speakeasy console-wall model'].includes(node.name))assert(!protectedArea.intersectsBox(new THREE.Box3().setFromObject(node)),'Furnishing crowds Speakeasy seating at '+shape+' '+x)});
+        }
+        assert(JSON.stringify(clientGetLighting())===lighting,'Speakeasy changed saved lighting');
+      } else if (room.state.environment==='ancient-temple') {
+        const THREE=await import('three');
+        const {ANCIENT_TEMPLE:fit,ANCIENT_TEMPLE_THEME:theme}=await import('/rendering/rooms/ancient-temple-theme.js');
+        const ready=root=>Object.values(theme.assets).every(asset=>root.getObjectByName(asset.name));
+        const current=scenery()[0],lighting=JSON.stringify(clientGetLighting()),sky=room.state.skybox;
+        for(let i=0;i<400&&!ready(current);i++)await new Promise(resolve=>setTimeout(resolve,25));
+        assert(ready(current),'Approved Temple models did not load');
+        byId('roomSettings').click();
+        assert(byId('roomEnvironment').value===theme.id&&byId('tableThemeName').textContent===theme.name,'Temple settings did not hydrate');
+        assert(byId('roomEnvironment').options.length===16,'Temple room choice missing');
+        const start=sent.length;byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:'oak'}],['tableColor',{color:'#655f4d'}]]),'Temple matching changed independent settings');
+        byId('roomSettingsClose').click();
+        const inspect=root=>{
+          root.updateWorldMatrix(true,true);
+          const north=root.getObjectByName('Temple north wall'),south=root.getObjectByName('Temple south wall');
+          const columns=[],braziers=[];
+          root.traverse(n=>{if(n.name==='Temple column model')columns.push(n);if(n.name==='Temple brazier model')braziers.push(n)});
+          assert(columns.length===4&&braziers.length===2,'Temple lost its columns or braziers');
+          assert([...columns,...braziers].every(n=>n.parent.parent===north),'North furnishings lost wall cutaway ownership');
+          assert(columns.every(n=>Math.abs(n.parent.position.x)<fit.openingWidth/2),'Columns no longer frame the loggia opening');
+          // Actual decoded shaft triangles must keep equal stone detail scale in both directions.
+          const density={around:[],vertical:[]};
+          columns[0].traverse(n=>{
+            if(!n.isMesh)return;
+            const g=n.geometry,p=g.attributes.position,uv=g.attributes.uv,index=g.index;
+            for(let t=0;t<(index?index.count:p.count);t+=3){
+              const ids=[0,1,2].map(k=>index?index.getX(t+k):t+k);
+              const points=ids.map(i=>new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(n.matrixWorld));
+              // A full-height side edge uniquely identifies shaft triangles, excluding rings/plinth.
+              if(!points.some((a,i)=>Math.abs(a.y-points[(i+1)%3].y)>20))continue;
+              for(let k=0;k<3;k++){
+                const a=points[k],b=points[(k+1)%3],dy=Math.abs(a.y-b.y),distance=a.distanceTo(b);
+                const kind=dy>distance*.999?'vertical':dy<.001?'around':null;
+                if(kind)density[kind].push(new THREE.Vector2().fromBufferAttribute(uv,ids[k]).distanceTo(new THREE.Vector2().fromBufferAttribute(uv,ids[(k+1)%3]))/distance);
+              }
+            }
+          });
+          assert(density.around.length&&density.vertical.length,'Column shaft UV coverage missing');
+          const mean=values=>values.reduce((a,b)=>a+b,0)/values.length;
+          const stretch=mean(density.around)/mean(density.vertical);
+          assert(stretch>.99&&stretch<1.01,'Stone shaft texture stretches vertically: '+stretch);
+          assert(density.around.every(value=>Math.abs(value/mean(density.around)-1)<.01),'Column texture crosses a wrapped seam within a triangle');
+
+          assert(root.getObjectByName('Temple relief model').parent.parent===root.getObjectByName('Temple west wall'),'Relief lost wall ownership');
+          assert(root.getObjectByName('Temple console model').parent.parent===south&&root.getObjectByName('Temple door model').parent.parent===south,'Rear furnishings lost wall ownership');
+          const pavers=[];root.getObjectByName('Temple paver model').traverse(n=>{if(n.isInstancedMesh)pavers.push(n)});
+          assert(pavers.length===1&&pavers[0].count<=fit.maximumPaverAxis**2,'Smooth paving is not a bounded batch');
+          const bounds=new THREE.Box3().setFromObject(pavers[0]),half=root.userData.halfSize;
+          assert(Math.abs(bounds.min.x+half.x-fit.paverGap/2)<.002&&Math.abs(bounds.max.z-half.z+fit.paverGap/2)<.002,'Paving does not follow room bounds');
+          assert(Math.abs(bounds.max.y-fit.floorY-.0525)<.001,'Paving lost its authored bevel height');
+          for(const chair of root.children.filter(n=>n.name==='Temple occupied chair')){
+            const model=chair.getObjectByName('Temple chair model');assert(model,'Occupied Temple chair missing');
+            assert(Math.abs(new THREE.Box3().setFromObject(model).min.y-fit.floorY)<.001,'Stone seat floats above floor');
+            const back=new THREE.Vector3(),inverse=model.matrixWorld.clone().invert();let count=0;
+            model.traverse(n=>{if(!n.isMesh)return;const p=n.geometry.attributes.position;for(let i=0;i<p.count;i++){const world=new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(n.matrixWorld);if(world.clone().applyMatrix4(inverse).y>.7){back.add(world);count++;}}});
+            const center=chair.getWorldPosition(new THREE.Vector3()),out=center.clone().setY(0).normalize();
+            assert(count&&back.divideScalar(count).sub(center).setY(0).dot(out)>0,'Actual stone backrest faces away from seating at seat '+chair.userData.seat);
+          }
+          const frame=root.getObjectByName('Temple opening-frame model'),toWall=north.matrixWorld.clone().invert(),box=new THREE.Box3();
+          frame.traverse(n=>{if(n.isMesh){const p=n.geometry.attributes.position;for(let i=0;i<p.count;i++)box.expandByPoint(new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(n.matrixWorld).applyMatrix4(toWall));}});
+          assert(box.min.z>.02,'Temple frame intersects wall reveal');
+          for(const x of [-16,0,16]){
+            const origin=new THREE.Vector3(x,fit.floorY+13.65,10).applyMatrix4(north.matrixWorld),ray=new THREE.Raycaster(origin,new THREE.Vector3(0,0,-1).transformDirection(north.matrixWorld),0,12),hits=[];
+            north.traverse(n=>{if(n.isMesh)(n.isInstancedMesh?THREE.InstancedMesh:THREE.Mesh).prototype.raycast.call(n,ray,hits)});
+            assert(!hits.length,'Opaque placeholder or wall blocks the Temple view');
+          }
+          root.traverse(n=>{assert(!n.isLight,'Temple imported a review light');if(n.isMesh){const hits=[];n.raycast(null,hits);assert(!hits.length,'Temple scenery intercepts picking');if(clientDeviceClass()==='phone')assert(!n.castShadow&&!n.receiveShadow&&[n.material].flat().every(m=>!m.normalMap&&!m.isMeshPhysicalMaterial),'Temple bypassed phone policy');}});
+        };
+        inspect(current);
+        const target=new THREE.WebGLRenderTarget(32,32),camera=new THREE.PerspectiveCamera(30,1,.1,300),background=clientScene.background;
+        clientScene.background=new THREE.Color('#73b5cf');camera.position.set(0,fit.floorY+13.65,-current.userData.halfSize.z+10);camera.lookAt(0,fit.floorY+13.65,-current.userData.halfSize.z-2);
+        const pixel=visible=>{current.visible=visible;clientRenderer.setRenderTarget(target);clientRenderer.render(clientScene,camera);const data=new Uint8Array(4);clientRenderer.readRenderTargetPixels(target,16,16,1,1,data);return [...data]};
+        const open=pixel(true),outside=pixel(false);assert(open.every((v,i)=>Math.abs(v-outside[i])<=1),'Temple opening occludes selected background pixels');
+        current.visible=true;clientScene.background=background;clientRenderer.setRenderTarget(null);target.dispose();
+        room.state.players.set('guest',{seat:2,participation:'player'});room.state.players.set('observer',{seat:4,participation:'spectator'});patches.forEach(fn=>fn(room.state));
+        assert(current.children.filter(n=>n.name==='Temple occupied chair').length===2,'Temple counted spectator or missed arrival');
+        for(let seat=0;seat<8;seat++)room.state.players.set('seat-'+seat,{seat,participation:'player'});patches.forEach(fn=>fn(room.state));inspect(current);
+        assert(current.children.filter(n=>n.name==='Temple occupied chair').length===8,'All stone seats must be checked');
+        clientCamera.position.set(0,60,0);clientControls.target.set(0,0,0);clientControls.update();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!current.getObjectByName('Temple ceiling').visible,'Temple ceiling obstructs overhead play');
+        clientCamera.position.set(0,4,-current.userData.halfSize.z-3);clientControls.target.set(0,0,0);clientControls.update();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!current.getObjectByName('Temple north wall').visible,'Temple columns do not follow wall cutaway');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));assert(!scenery().length&&current.parent===null,'Temple leaked on switch');room.state.environment=theme.id;
+        for(const [shape,x,z] of [['rect',2,1.4],['roundedRect',10,7],['round',12,7],['oval',40,15],['hex',80,2],['rect',2,80]]){
+          room.state.tableShape=shape;room.state.tableX=x;room.state.tableZ=z;patches.forEach(fn=>fn(room.state));const root=scenery()[0];
+          for(let i=0;i<400&&!ready(root);i++)await new Promise(resolve=>setTimeout(resolve,25));assert(ready(root),'Resized Temple assets did not load');inspect(root);
+          const {tableOutline}=await import('/shared/pieces.js');const depth=Math.max(...tableOutline(shape,x,z).map(p=>Math.abs(p.z)));
+          const protectedArea=new THREE.Box3(new THREE.Vector3(-x-5.3,-10,-depth-5.3),new THREE.Vector3(x+5.3,10,depth+5.3));
+          root.traverse(n=>{if(['Temple column model','Temple brazier model','Temple console model'].includes(n.name))assert(!protectedArea.intersectsBox(new THREE.Box3().setFromObject(n)),'Temple furnishing crowds seating at '+shape+' '+x)});
+        }
+        assert(JSON.stringify(clientGetLighting())===lighting&&room.state.skybox===sky,'Temple changed saved lighting/sky');
+      } else if(Object.hasOwn((await import('/rendering/rooms/remaining-room-themes.js')).REMAINING_ROOM_THEMES,room.state.environment)) {
+        const THREE=await import('three'),{REMAINING_ROOM_THEMES:themes}=await import('/rendering/rooms/remaining-room-themes.js');
+        const lighting=JSON.stringify(clientGetLighting()),sky=room.state.skybox;
+        const inspect=(root,theme)=>{
+          root.updateWorldMatrix(true,true);
+          for(const kind of ['north','south','west','east'])if(theme.assets[kind])assert(root.getObjectByName(theme.assets[kind].name).parent.parent===root.getObjectByName(theme.name+' '+kind+' wall'),'Dressing lost wall ownership: '+theme.id+' '+kind);
+          for(const chair of root.children.filter(n=>n.name===theme.playArea.chairName)){
+            const model=chair.getObjectByName(theme.assets.chair.name);assert(model,'Authored chair missing: '+theme.id);
+            assert(Math.abs(new THREE.Box3().setFromObject(model).min.y-theme.structure.floorY)<.001,'Chair is floating: '+theme.id);
+            const inverse=model.matrixWorld.clone().invert(),back=new THREE.Vector3();let count=0;
+            model.traverse(n=>{if(!n.isMesh)return;const p=n.geometry.attributes.position;for(let i=0;i<p.count;i++){const world=new THREE.Vector3().fromBufferAttribute(p,i).applyMatrix4(n.matrixWorld);if(world.clone().applyMatrix4(inverse).y>.7){back.add(world);count++;}}});
+            const center=chair.getWorldPosition(new THREE.Vector3()),out=center.clone().setY(0).normalize();
+            assert(count&&back.divideScalar(count).sub(center).setY(0).dot(out)>0,'Chair faces away from table: '+theme.id+' seat '+chair.userData.seat);
+          }
+          if(theme.id==='garden-conservatory'){
+            const half=root.userData.halfSize,columns=Math.min(32,Math.ceil(half.x*2/7)),rows=Math.min(32,Math.ceil(half.z*2/7));
+            const ray=new THREE.Raycaster(new THREE.Vector3(-half.x+half.x*2/columns,theme.structure.floorY+.3,-half.z+half.z*2/rows),new THREE.Vector3(0,-1,0),0,1),hits=[];
+            root.traverse(n=>{if(n.isMesh)(n.isInstancedMesh?THREE.InstancedMesh:THREE.Mesh).prototype.raycast.call(n,ray,hits)});
+            assert(hits.length,'Conservatory tile joints expose the sky below');
+            for(const kind of ['west','east']){const box=new THREE.Box3().setFromObject(root.getObjectByName(theme.assets[kind].name));assert(Math.abs(box.max.z-box.min.z-half.z*2)<.01,'Conservatory iron glazing frame fails to span resized wall');}
+          }
+          root.traverse(n=>{assert(!n.isLight,'Staged light imported: '+theme.id);if(n.isMesh){const hits=[];n.raycast(null,hits);assert(!hits.length,'Scenery intercepts picking: '+theme.id);if(clientDeviceClass()==='phone')assert(!n.castShadow&&!n.receiveShadow&&[n.material].flat().every(m=>!m.normalMap&&!m.isMeshPhysicalMaterial),'Phone detail policy bypassed: '+theme.id);}});
+        };
+        const testOnly=new URLSearchParams(location.search).get('themeTestOnly');
+        for(const theme of Object.values(themes).filter(theme=>!testOnly||theme.id===testOnly)){
+          room.state.environment=theme.id;room.state.tableX=10;room.state.tableZ=7;room.state.tableShape='roundedRect';patches.forEach(fn=>fn(room.state));
+          let root=scenery()[0];const ready=()=>Object.values(theme.assets).every(asset=>root.getObjectByName(asset.name));
+          for(let i=0;i<800&&!ready();i++)await new Promise(resolve=>setTimeout(resolve,25));assert(ready(),'Assets failed to load: '+theme.id);
+          byId('roomSettings').click();assert(byId('roomEnvironment').value===theme.id&&byId('roomEnvironment').options.length===16,'Room select missing '+theme.id);
+          const start=sent.length;byId('tableThemeApply').click();assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:theme.matchingTable.rimWood}],['tableColor',{color:theme.matchingTable.feltColor}]]),'Matching changed independent settings: '+theme.id);byId('roomSettingsClose').click();
+          for(let seat=0;seat<8;seat++)room.state.players.set('theme-seat-'+seat,{seat,participation:'player'});patches.forEach(fn=>fn(room.state));inspect(root,theme);
+          assert(root.children.filter(n=>n.name===theme.playArea.chairName).length===8,'Missing occupied seat: '+theme.id);
+          clientCamera.position.set(0,60,0);clientControls.target.set(0,0,0);clientControls.update();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+          assert(!root.getObjectByName(theme.name+' ceiling').visible,'Roof blocks overhead play: '+theme.id);
+          clientCamera.position.set(0,4,-root.userData.halfSize.z-3);clientControls.target.set(0,0,0);clientControls.update();await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+          assert(!root.getObjectByName(theme.name+' north wall').visible,'North wall fails cutaway: '+theme.id);
+          for(const [shape,x,z] of [['rect',2,1.4],['round',12,7],['hex',80,2],['rect',2,80]]){
+            room.state.tableShape=shape;room.state.tableX=x;room.state.tableZ=z;patches.forEach(fn=>fn(room.state));root=scenery()[0];
+            for(let i=0;i<800&&!ready();i++)await new Promise(resolve=>setTimeout(resolve,25));assert(ready(),'Resized assets failed: '+theme.id);inspect(root,theme);
+            const {tableOutline}=await import('/shared/pieces.js');const depth=Math.max(...tableOutline(shape,x,z).map(p=>Math.abs(p.z)));
+            const protectedArea=new THREE.Box3(new THREE.Vector3(-x-5.3,-5,-depth-5.3),new THREE.Vector3(x+5.3,10,depth+5.3));
+            for(const kind of ['north','south','east','west'])if(theme.assets[kind])assert(!protectedArea.intersectsBox(new THREE.Box3().setFromObject(root.getObjectByName(theme.assets[kind].name))),'Wall dressing crowds seating: '+theme.id+' '+shape+' '+kind);
+          }
+          room.state.environment='standard';patches.forEach(fn=>fn(room.state));assert(!scenery().length&&root.parent===null,'Room leaked after switch: '+theme.id);
+        }
+        assert(JSON.stringify(clientGetLighting())===lighting&&room.state.skybox===sky,'Theme changed saved sky/lighting');
       } else {
         assert(scenery().length===0,'The legacy preview URL overrode the saved Standard room');
         assert(byId('tableThemeMatch').hidden,'A theme-free room offers a matching table');
@@ -3633,6 +3866,30 @@ SCENES.push({
 });
 
 SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-speakeasy',
+  page: '/table.html?fixtureEnvironment=1920s-speakeasy',
+});
+
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-ancient-temple',
+  page: '/table.html?fixtureEnvironment=ancient-temple',
+});
+
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-remaining-rooms',
+  page: '/table.html?fixtureEnvironment=starship-lounge',
+});
+
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-conservatory',
+  page: '/table.html?fixtureEnvironment=garden-conservatory&themeTestOnly=garden-conservatory',
+});
+
+SCENES.push({
   name: 'cozy-ceiling-sky',
   page: '/table.html',
   root: '#ceilingFixture',
@@ -3709,7 +3966,7 @@ SCENES.push({
       const select=byId('roomEnvironment');
       const selectBox=select.getBoundingClientRect();
       assert(selectBox.width>0&&selectBox.left>=0&&selectBox.right<=innerWidth,'Room style selector is clipped');
-      assert(select.value==='poker-night'&&select.options.length===5,'Room style options are missing');
+      assert(select.value==='poker-night'&&select.options.length===16,'Room style options are missing');
       assert(select.labels[0].textContent.trim()==='Room style'&&select.getAttribute('aria-describedby')==='roomEnvironmentHint','Room selector lost its accessible name or hint');
       if(matchMedia('(pointer:coarse)').matches)assert(selectBox.height>=44,'Room style touch target is too short');
       select.focus();assert(document.activeElement===select,'Room style is not keyboard focusable');

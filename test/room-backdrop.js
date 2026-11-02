@@ -82,7 +82,24 @@ test('all viewers follow shared room styles with bounded, disposable runtimes', 
 test('invalid or absent legacy styles normalize to Standard and cannot name arbitrary assets', () => {
   assert.deepEqual(
     ROOM_ENVIRONMENTS.map(({ id }) => id),
-    ['standard', 'cozy', 'poker-night', 'medieval-tavern', 'modern-bar'],
+    [
+      'standard',
+      'cozy',
+      'poker-night',
+      'medieval-tavern',
+      'modern-bar',
+      '1920s-speakeasy',
+      'ancient-temple',
+      'starship-lounge',
+      'victorian-study',
+      'mountain-cabin',
+      'pirate-captains-cabin',
+      'wizards-workshop',
+      'cyberpunk-back-room',
+      'japanese-game-cafe',
+      'garden-conservatory',
+      'orbital-observation-deck',
+    ],
   );
   for (const value of [undefined, null, '', 'constructor', 'Cozy', '/custom.glb', {}, []]) {
     assert.equal(normalizeRoomEnvironment(value), 'standard');

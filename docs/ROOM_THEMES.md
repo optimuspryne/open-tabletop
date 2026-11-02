@@ -2,15 +2,17 @@
 
 The [room theme expansion plan](PLAN_ROOM_THEMES.md) records fourteen themes,
 starting with the approved Poker Night design. Registered choices are Standard,
-Cozy, Poker Night, Medieval Tavern and Modern Bar; the remaining concepts are a backlog.
+Cozy, Poker Night, Medieval Tavern, Modern Bar, Speakeasy, Ancient Temple and
+all nine themes in the [runtime review](ROOM_THEME_RUNTIME_REVIEW.md): **16** choices
+in total. All eleven review studies are integrated locally for owner testing.
 
 Room themes build viewer-local scenery around the existing playable table. The
 cozy room is the first registered theme. Its current art, layout, authored models,
 phone fallback, clear windows, sharp rug and full tabletop shadow are retained.
 
 The server owns `State.environment`, a public per-room choice of `standard`,
-`cozy`, `poker-night`, `medieval-tavern` or `modern-bar`. In **Room Settings → Table Size & Color**, above Shape, the approved native
-**Room style** select offers **Standard (skybox only)**, **Cozy game room**, **Poker Night**, **Medieval Tavern** and **Modern Bar**.
+one of the 16 IDs in `shared/room-environments.js`. In **Room Settings → Table Size & Color**, above Shape, the approved native
+**Room style** select offers **Standard (skybox only)**, **Cozy game room**, **Poker Night**, **Medieval Tavern**, **Modern Bar**, **1920s Speakeasy**, **Ancient Temple** and the nine reviewed rooms.
 GM/owner changes use `roomEnvironment {environment}`; the guarded handler validates
 the exact payload, ignores repeats and schedules the existing durable save. All
 clients receive the schema patch and switch together. The selection is stored in
@@ -21,9 +23,12 @@ configured, then refresh clients. No new service, port or environment variable i
 Poker Night extends the ID constraint with additive migration `025_poker_night.sql`;
 apply it through the configured migration role, restart the server and refresh
 clients. Medieval Tavern adds migration `026_medieval_tavern.sql` through the same
-workflow. The fresh-install baseline includes all four environment migrations. Existing styles and
+workflow. The fresh-install baseline includes all environment migrations. Existing styles and
 the Standard default are preserved. Modern Bar adds migration
-`027_modern_bar.sql` with the same preservation/upgrade steps.
+`027_modern_bar.sql` with the same preservation/upgrade steps. Speakeasy adds
+`028_speakeasy.sql`, and Ancient Temple adds `029_ancient_temple.sql`; all are
+included in the fresh baseline. Migration `030_remaining_room_themes.sql` adds
+the nine remaining reviewed themes with the same upgrade/preservation contract.
 
 `createRoomBackdrop` follows the shared choice, resolves bundled definitions through
 `ROOM_THEMES`, and delegates construction to `createRoomEnvironment`. Switching
@@ -289,6 +294,53 @@ this two-model correction needs a client hard refresh only. Apply migration `027
 the migration role, restart the server and refresh clients. Existing room choices
 and the Standard default are retained. Manual device/gameplay acceptance remains.
 
+## 1920s Speakeasy
+
+`rooms/speakeasy-theme.js` registers the approved v4 design as
+`1920s-speakeasy` / **1920s Speakeasy**. Eight GLBs retain smooth velvet chairs,
+fitted brass seat piping, the scalloped booth, compact fluted bar/decanters,
+rear console/abstract art/two clear-spaced fan motifs, paneled door, five north
+fans, satin pendants/conical ceiling canopies and bordered woven rug.
+
+The adaptive shell uses shared floor/panel/opening helpers and the source palette.
+Wood table supports meet the existing tabletop underside within its shared outline.
+North and south furnishings inherit their wall cutaways; pendants inherit the
+ceiling cutaway and omit shadows that would obscure the game. Chair models are
+reused only for occupied seats; feet start at the floor. The rug follows effective
+table extents. The shared resting pup stays in the open southwest corner.
+Phone material/shadow policy, one load per asset, missing-model fallbacks, stale
+callbacks and disposal stay in the shared owners. There is no imported review
+table, camera, light, fixed chair roster, new input path or lighting override.
+
+**Use matching table** explicitly applies Walnut / quiet burgundy `#493745`;
+selection alone preserves the saved table, sky and lighting. Apply migration 028
+through the configured migration role, restart and refresh clients. See
+[actual runtime captures, file summary and checks](PLAN_ROOM_THEMES.md#speakeasy-runtime-integration--october-19-2026).
+
+## Ancient Temple
+
+`rooms/ancient-temple-theme.js` adds `ancient-temple` / **Ancient Temple** using
+the approved smooth v2 source. Eight models supply stone seats, a reusable column,
+brazier, sandstone relief, console, door, loggia frame and paving stone. Four
+columns remain aligned with the north opening; two braziers flank the play area.
+North furnishings/frame, west relief and south console/door follow their wall
+cutaways; the ceiling follows the existing overhead cutaway. The shared pup is
+reused. Seats follow occupied presence and receive the correct local half-turn.
+
+The blue review panel and foliage diorama are excluded: the aperture exposes
+the selected sky, including the existing flat background when sky is off. The
+room never selects sky/lighting or installs lights. Coals remain static emission.
+`buildPaving` repeats the authored smooth tile as at most 32×32 instances with
+shared geometry/materials, explicit picking exclusion and phone shadow policy.
+The existing assembly retains those resources for the usual deduplicated cleanup;
+missing models keep bounded procedural fallbacks. Stone table trestles reach
+`TABLE_FINISH.rimBase` within the shared physical outline. The source's review
+table remains illustrative; the playable table/physics owner stays authoritative.
+
+**Use matching table** explicitly applies Oak / olive felt `#655f4d` using existing
+messages. Apply migration 029 through the migration role, restart and refresh.
+See [runtime views, file summary and checks](PLAN_ROOM_THEMES.md#ancient-temple-runtime-integration--october-19-2026).
+
 ## Approved rear-wall additions
 
 The south walls now carry the accepted Blender additions. Modern Bar has a
@@ -335,3 +387,19 @@ and licenses, add the ID to `shared/room-environments.js` and a new numbered mig
 that extends the database constraint, and run the same lifecycle/device tests. Use theme-specific geometry
 or extend an existing surface implementation when its rules fit; avoid copying
 phone preparation, occupancy, cutaway or disposal logic into the theme.
+
+
+## Shared authored-study adapter
+
+`createAuthoredRoomTheme(config)` adapts the nine studies from their common native
+wall/floor/ceiling/play-area collections. Static configs retain each palette,
+window aperture, fixture anchor and model list. Walls/furnishings share cutaways;
+separate fixture assets retain circular conical covers as roof members adapt.
+Conservatory side iron frames span its resized wall apertures.
+Native chair backs receive the occupied-seat half-turn and feet remain grounded.
+The shared pup, phone detail stripping and one-load/resource disposal are reused.
+`buildRoomPaving` is the existing Temple tile recipe extracted for Conservatory;
+Temple retains its existing config/behavior. Floor backing closes sky leaks at
+joints. Conservatory has 28-unit wall clearance for mature foliage; the other
+studies use 24. Explicit matching uses only existing Oak/Walnut plus the source's
+quiet felt color. Source/table/sky/lighting ownership is unchanged.

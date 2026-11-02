@@ -1,4 +1,5 @@
 import { inTable } from '../../../shared/pieces.js';
+import { ROOM_COMPANION_ASSETS } from './room-companion.js';
 import { releaseCanvasOnDispose } from '../resources.js';
 import { COZY_SHADOWS } from '../cozy-room-shadows.js';
 import { COZY_CEILING, createCozyCeiling } from './cozy-ceiling.js';
@@ -28,6 +29,7 @@ export const COZY_ROOM = Object.freeze({
   shelfTop: 12.061, // Owner's corrected shelf: 1.723m, scaled by seven.
   chairClearance: 2.5,
   furnitureURLs: Object.freeze({
+    pup: ROOM_COMPANION_ASSETS.pup.url,
     chair: '/models/environments/cozy/cozy-chair.glb',
     shelf: '/models/environments/cozy/cozy-game-shelf.glb',
     lamp: '/models/environments/cozy/cozy-floor-lamp.glb',

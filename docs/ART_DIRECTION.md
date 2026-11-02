@@ -1,11 +1,58 @@
 # Room asset material study
 
+All eleven reviewed room studies are integrated locally as of October 19, 2026.
+The latest smooth/lighting/botanical revisions are preserved in 66 additional
+models for the final nine themes. [Actual runtime views and matches](ROOM_THEME_RUNTIME_REVIEW.md)
+are ready for owner testing; final gameplay acceptance is pending.
+
+## Resting gray pup — approved shared corner placement
+
+The owner approved the all-gray reclining v2 dog and the four furnished-room
+corner mockups on 2026-10-17. Her slate-blue oval bed sits in the open southwest
+corner of every furnished room, facing the table.
+Standard stays skybox-only. Preserve the gray face/coat, small natural eyes,
+longer muzzle, splayed/folded ears and surface-rooted fine fur.
+The shared scenery derivative keeps every strand as a tapered ribbon and retains
+the original ear shells, with simplified skin and material batching before
+lossless publication. The accepted detailed master is unchanged. Compare the
+actual room render to that master, rather than treating a studio render as proof
+of in-app appearance. See [integration and checks](PLAN_ROOM_THEMES.md#resting-gray-room-companion).
+
 Rear-wall additions were approved and integrated locally: Modern Bar glass entry/teal corner
 booth, Poker Night windowed walnut door and a second Tavern leaded window. See
 [the approved review](PLAN_ROOM_THEMES.md#rear-wall-additions--blender-review).
 These extend the existing palettes. The two doors/nook are exported individually;
 Tavern reuses its corrected window on a second wall. See the integration record
 below the review for current checks.
+
+## Ancient Temple — approved smooth v2 integrated locally
+
+The October 18 approved source in companion `temple_cyberpunk_review_v2/` supplies
+smooth stone seats, four monumental sandstone columns, bronze braziers, an
+abstract relief, offering console/chart and recessed entry. The blue exterior
+placeholder becomes an open view of the selected sky. Preserve the quiet sheltered
+play area, smooth bevels and warm mineral palette. Eight optimized GLBs reuse
+occupied seating and wall cutaways; one native paver becomes bounded instanced
+flooring that adapts around the table. Static coals provide decorative emission.
+The existing playable table keeps its rendering/physics owner; explicit matching
+uses Oak and quiet olive felt `#655f4d`, with adaptive stone supports underneath.
+The shared pup remains in its corner. [Actual runtime views and integration checks](PLAN_ROOM_THEMES.md#ancient-temple-runtime-integration--october-19-2026)
+use the existing Cloudy - Clear Afternoon sky in isolated preview state; the
+runtime theme does not select or override sky/lighting.
+
+## 1920s Speakeasy — approved v4 integrated locally
+
+The October 18 approved source in companion `speakeasy_review_v4/` supplies the
+runtime furnishings. Preserve the smooth burgundy velvet chairs and scalloped
+bench, fitted brass seat piping, clear rear-wall fan spacing, satin shades and
+ceiling-connected stems beneath conical canopies. Eight material-batched models
+retain those corrections; runtime chairs follow occupied seats. The room owns
+its adaptive shell, floor, bordered rug and wood table supports. The playable
+table remains with its existing owner; explicit matching uses Walnut and quiet
+burgundy felt `#493745`. Review lighting is excluded and the shared pup is reused.
+Native materials stay intact; export derivatives adapt the oak tint and subtle
+procedural relief to portable maps. [Actual runtime views and integration checks](PLAN_ROOM_THEMES.md#speakeasy-runtime-integration--october-19-2026)
+are separate from the earlier Blender approval renders.
 
 ## Modern Bar — approved Blender source and local integration
 
@@ -1390,3 +1437,29 @@ Commit validation — October 16, 2026: an isolated copy of the staged snapshot 
 `cozy-ceiling-sky` desktop/touch browser checks. The earlier 1,170 count describes
 the combined working tree; unrelated pending test cleanup was deliberately excluded
 from this commit. The ceiling model's staged bytes/hash match its manifest.
+
+
+## Remaining room-theme design batch — October 17, 2026
+
+All eleven remaining themes have original editable Blender asset studies and
+room/seated/reverse mockups. The
+[review index](ROOM_THEME_REVIEW.md) and
+[offline gallery](mockups/remaining-room-themes-v1/index.html) collect the designs,
+palettes and asset inventories. Prior approved sources and runtime art are
+preserved. Speakeasy v4, Ancient Temple v2 and Cyberpunk v3 received owner
+approval on October 18; Conservatory and Japanese v2 received approval October 19.
+The six other designs now have smooth-component polish and supported lighting.
+Wizard uses bracket lanterns; Victorian uses brass wall sconces. Eight pendant
+connections, including Japanese v3, fit their actual ceilings/beams with conical
+covers. All current sources and views are linked in the review index; the six
+polished designs await review. Review lighting, exterior
+dioramas and custom tabletop appearances are illustrative. This is an authoring
+and documentation slice, with no runtime theme, icon, control or model export.
+
+## Local room asset organization (October 19, 2026)
+
+Current final editable files, runtime previews and source hashes for the eleven reviewed themes are indexed in the companion final-room package. Older galleries remain historical review evidence; their superseded native drafts were removed after preserving final sources and unique owner snapshots. [Open the final-room index](../../Open-Tabletop_Asset_Builders/3d_models/rooms/README.md).
+
+### Earlier room sources relocated (October 19, 2026)
+
+Cozy, Poker Night, Medieval Tavern and Modern Bar now share the same companion `3d_models/rooms/<theme-id>/` organization as the eleven newer themes. Their final furnishings, corrected windows/lighting, ceiling and rear-wall sources are together, with original publisher inputs, runtime copies, maps and review/provenance records. The accepted gray pup master and scenery derivative live once under `rooms/_shared/gray-pup-in-bed/`. Original owner sources and approval inputs are retained; superseded drafts, backups, redundant ZIP bundles and unused compression candidates were removed. Old package names elsewhere in dated records describe history. [Current source index](../../Open-Tabletop_Asset_Builders/3d_models/rooms/README.md). The app model files/manifest/registry are unchanged.

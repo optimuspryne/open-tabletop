@@ -1,6 +1,7 @@
 import { disposeHierarchy } from '../resources.js';
 import { createRoomAssembly } from './room-assembly.js';
 import { createRoomSeating } from './room-seating.js';
+import { buildRoomCompanion } from './room-companion.js';
 import { tableOutline } from '../../../shared/pieces.js';
 
 // Own the local backdrop lifecycle. A theme supplies component builders and art;
@@ -115,6 +116,7 @@ export function createRoomEnvironment({
       const furnishings =
         theme.furnishings?.build?.({ ...dependencies, structure, openings, playArea }) || {};
       theme.decoration?.build?.({ ...dependencies, structure, openings, playArea, furnishings });
+      if (theme.assets?.pup) buildRoomCompanion(dependencies);
       if (playArea.chairTemplate) {
         const asset = theme.assets?.[playArea.chairModel];
         seating = createRoomSeating({

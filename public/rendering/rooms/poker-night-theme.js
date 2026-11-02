@@ -1,4 +1,5 @@
 import { wallOpeningPanels } from './wall-openings.js';
+import { ROOM_COMPANION_ASSETS } from './room-companion.js';
 import { inTable } from '../../../shared/pieces.js';
 import { releaseCanvasOnDispose } from '../resources.js';
 import { createOakFloor, createOakTrim, createPlasterPanel } from '../cozy-room-surfaces.js';
@@ -573,6 +574,7 @@ export const POKER_NIGHT_THEME = Object.freeze({
   decoration: Object.freeze({ build: buildDecoration }),
   atmosphere: Object.freeze({ createMaterials, suggestedLighting: 'warm' }),
   assets: Object.freeze({
+    ...ROOM_COMPANION_ASSETS,
     ...Object.fromEntries(
       [
         'chair',

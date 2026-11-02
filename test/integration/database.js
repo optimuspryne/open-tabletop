@@ -1,3 +1,4 @@
+import { ROOM_ENVIRONMENTS } from '../../shared/room-environments.js';
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
@@ -24,7 +25,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 27); // Includes the Modern Bar environment.
+  assert.equal(migrations.rows.length, 30); // Includes all remaining reviewed room environments.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -109,11 +110,20 @@ test('users, rooms, membership, and durable state round-trip through PostgreSQL'
   assert.equal(state.environment, 'medieval-tavern');
   await database.saveRoomState(room.id, { ...state, environment: 'modern-bar' });
   assert.equal((await database.getRoomState(room.id)).environment, 'modern-bar');
+  await database.saveRoomState(room.id, { ...state, environment: '1920s-speakeasy' });
+  assert.equal((await database.getRoomState(room.id)).environment, '1920s-speakeasy');
+  await database.saveRoomState(room.id, { ...state, environment: 'ancient-temple' });
+  assert.equal((await database.getRoomState(room.id)).environment, 'ancient-temple');
+  for (const { id: environment } of ROOM_ENVIRONMENTS) {
+    await database.saveRoomState(room.id, { ...state, environment });
+    assert.equal((await database.getRoomState(room.id)).environment, environment);
+  }
+  await database.saveRoomState(room.id, { ...state, environment: 'ancient-temple' });
   const other = await database.createRoom({ ownerId: owner.id, code: 'OTHERROOM', name: 'Other' });
   assert.equal((await database.getRoomState(other.id)).environment, 'standard');
   const fresh = createDatabase(new pg.Pool({ connectionString }));
   try {
-    assert.equal((await fresh.getRoomState(room.id)).environment, 'modern-bar');
+    assert.equal((await fresh.getRoomState(room.id)).environment, 'ancient-temple');
     assert.equal((await fresh.getRoomState(other.id)).environment, 'standard');
   } finally {
     await fresh.close();

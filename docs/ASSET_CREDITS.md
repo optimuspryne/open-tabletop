@@ -10,6 +10,27 @@ requirement is actually met.
 
 ---
 
+## Original room companion — `models/environments/shared/gray-pup-in-bed.glb`
+
+The gray reclining terrier and slate-blue dog bed are original Open Tabletop
+geometry/materials authored with Codex in Blender under the repository license
+(GPL-3.0), from the owner's photograph and corrections. The photograph is a visual
+reference only and is not embedded or redistributed. No third-party models,
+textures or additional attribution requirements are introduced.
+
+The accepted detailed source remains unchanged in companion
+`3d_models/original/pup_in_bed_v2/pup-in-bed.blend`. Its separate
+`pup_room_integration_v1/prepare_runtime.py` derivative preserves the pose, gray
+palette, bed, complete ear shells and rooted fur strands, with every fur strand retained as a tapered surface ribbon,
+simplified skin and material batching for scenery. The ordinary derivative is
+227,104 triangles / 14 batches / 7,450,420 bytes; the canonical lossless Meshopt
+payload is 4,765,964 bytes, with no texture dependencies. The publisher verifies
+decoded geometry/materials and desktop/touch pixels against that derivative;
+separate room renders compare the derivative with the accepted high-detail master.
+Source/export hashes, approval and actual checks are retained beside the source
+and in the app model manifest. This is shared visual scenery in the four furnished
+rooms; the original seated study is not bundled.
+
 ## Website artwork - `website/assets/`
 
 - `logo-wordmark.svg` is an unchanged copy of `public/logo-wordmark.svg`, reused for website
@@ -412,3 +433,104 @@ new optimized derivatives are now bundled: Modern Bar door/nook and Poker Night
 door. Tavern reuses its existing corrected window GLB. Portable alpha and original
 PBR adaptations change derivatives only; source files retain their authored
 materials. The model READMEs and companion runtime report contain exact hashes.
+
+
+## Remaining room-theme review studies — October 17, 2026
+
+The companion `3d_models/original/remaining_room_themes_v1/` package contains
+original geometry and procedural materials for eleven pending room themes, with
+actual Blender render masters. New furniture, architecture, stylized exterior
+dioramas, unbranded game boxes and abstract artwork are original project work
+under the repository license. Sources reuse the existing credited CC0 oak color
+texture by Luke.RUSTLTD; images are packed in the editable files. No third-party
+model, photograph or font is downloaded, and no image-generation insert is used.
+
+The review gallery uses system fonts; the contact sheet uses the locally installed
+DejaVu Sans font. JPEGs are derivatives of the preserved PNG masters. This
+original review slice added no bundled runtime GLB, texture, catalog entry or
+in-app credit requirement. Current approvals are tracked in the review index;
+Speakeasy runtime derivatives are documented below. See [the review index](ROOM_THEME_REVIEW.md)
+and companion README for sources, exact file/helper inventory and audit reports.
+
+
+## 1920s Speakeasy runtime derivatives — October 19, 2026
+
+Eight original project GLBs in `models/environments/speakeasy/` derive from the
+owner-approved companion `speakeasy_review_v4/speakeasy-piping-v4.blend`, SHA-256
+`258e96c3c6cac4f341b0f8224f34b935494b92522138675f6d53e9e3dea0fe5d`.
+Geometry, abstract artwork and portable material adaptations are original project
+work under the repository license. Tinted joinery reuses Luke.RUSTLTD's existing
+CC0 oak color map, already credited above and in-app. No new third-party asset or
+attribution is introduced. The authored source and packed original texture are
+preserved. `speakeasy_runtime_v1/` retains the exporter, raw GLBs/maps, per-object
+transforms, source/export hashes and PNG runtime capture masters. The app carries
+one compressed derivative per asset, totaling 3,571,016 bytes from 6,985,820 raw
+export bytes. Runtime capture JPEGs illustrate the real production renderer.
+The source table/cameras/lights and review chair roster are excluded; the gray
+pup uses its already credited shared derivative. See [integration](PLAN_ROOM_THEMES.md#speakeasy-runtime-integration--october-19-2026).
+
+
+## Ancient Temple runtime derivatives — October 19, 2026
+
+Eight original project GLBs in `models/environments/ancient-temple/` derive from
+the approved companion `temple_cyberpunk_review_v2/ancient-temple-v2.blend`, SHA-256
+`f9d44c0b6ebab77ae916a7584c0c182a4b422b97b1aecd267c1d5eb2831714fc`.
+All geometry, abstract relief/chart and portable procedural stone maps are project
+originals under the repository license. No third-party model, image or font is
+added. The room shell reuses the already credited project stone normal map; the
+shared pup and preview's existing Cloudy - Clear Afternoon sky retain their
+existing credits. Source materials and the original packed image remain intact.
+Companion `ancient_temple_runtime_v1/` retains the raw GLBs/maps, exporter, transform/
+bounds/smooth-face/hash report and runtime PNG capture masters. The app bundles
+one compressed derivative per asset: 2,629,816 bytes from 4,998,200 raw bytes.
+The shaft UV wrap is corrected in the derivative exporter for even stone scale;
+its geometry, normals, materials/maps and approved native source are unchanged.
+Review lights, game table, fixed roster and exterior placeholder/foliage are
+excluded. Runtime JPEGs show the production renderer and an explicitly selected
+existing sky. No additional in-app attribution is required. See [integration](PLAN_ROOM_THEMES.md#ancient-temple-runtime-integration--october-19-2026).
+
+
+## Remaining nine room themes — October 19, 2026
+
+66 original project GLBs in `models/environments/<theme-id>/` derive from the
+latest reviewed native sources below. Runtime integration of all nine was
+explicitly authorized October 19; final owner in-app acceptance remains pending.
+The sources and packed images are unchanged. Derivatives total **61,445,704 bytes**
+from 105,958,496 raw bytes (42.0% smaller), with zero validator errors/warnings.
+
+| Theme | Companion native source under `3d_models/original/` | SHA-256 | Models |
+| --- | --- | --- | ---: |
+| Starship Lounge | `remaining_room_polish_v2/starship-lounge-v2.blend` | `e3693cd39bd7463506236f9be0fb4822380a6633f58a2b77639852dd522ec9ba` | 8 |
+| Victorian Study | `remaining_room_polish_v2/victorian-study-v2.blend` | `2b9bfa65160f95c2bbfbb9e4c127a7802bfcb89a06432ac2d519d770b66bcbe5` | 7 |
+| Mountain Cabin | `remaining_room_polish_v2/mountain-cabin-v2.blend` | `cf5dfab492cb87ab021de46b7a7d0b7da5d02f2860bc8352d5f8ccee07ace19e` | 8 |
+| Pirate Captain's Cabin | `remaining_room_polish_v2/pirate-captains-cabin-v2.blend` | `10dceb7119545d1ac31ed60f8b549c7d28113adaa7a363163e8926c752a22b77` | 8 |
+| Wizard's Workshop | `remaining_room_polish_v2/wizards-workshop-v2.blend` | `f91dd448e6b775abb8607d236ac2d1ba4e982d5689d0168051cf92e09c1f8abe` | 7 |
+| Cyberpunk Back Room | `cyberpunk_review_v3/cyberpunk-pipe-returns-v3.blend` | `3c91a720f908f8ee957dfe95c77c904cf5c80129ab6e2ff772665ed67a937b29` | 7 |
+| Japanese Game Café | `remaining_room_polish_v2/japanese-game-cafe-v3.blend` | `def01889a0dcc0d11008cb1233e9a812ba0c2788e31174eff2d19f350dd36bec` | 8 |
+| Garden Conservatory | `garden_japanese_review_v2/garden-conservatory-v2.blend` | `e07b61c1d47b7e5b887b276b97c8dfee0dcd6e685932384c18743f8c6945130e` | 7 |
+| Orbital Observation Deck | `remaining_room_polish_v2/orbital-observation-deck-v2.blend` | `cfecc3e371ca5fb078f0c853c674b36655fa2688ace1c63059e2f540e8e13d3b` | 6 |
+
+Existing original geometry, connected conical ceiling covers, wall brackets,
+fluorescent fixture/pipe returns and varied botanical meshes are retained. Older
+Cyberpunk flat faces are smoothed in the unsaved export copy; its geometry and
+approved source remain intact. The Victorian derivative clock rests on its
+mantel. Shared evaluated-mesh/PBR helpers retain original scalar finishes and
+bake the packed oak tint; procedural relief becomes periodic normal/roughness
+maps only in exported derivatives. New maps/geometry are project originals under
+the repository license. The previously credited packed CC0 oak texture, existing
+runtime shell normals, shared pup and review sky keep their existing licenses.
+No external asset, ImageGen output or additional in-app attribution is introduced.
+
+Companion `remaining_rooms_runtime_v1/` holds guarded source inventories, exporter,
+raw exports/maps, part/material/smooth-face/bounds/hash reports, desktop/touch
+publication, production capture recipes/PNG masters and delivery audits. Canonical
+app models/manifests retain decoded geometry/image/material/browser fingerprints.
+[Current review, matching palettes and operating steps](ROOM_THEME_RUNTIME_REVIEW.md).
+
+## Local room asset organization (October 19, 2026)
+
+The eleven reviewed theme sources were consolidated into companion `3d_models/rooms/` on October 19, 2026. Authored source materials, packed images, sources/licenses and installed runtime binaries are unchanged. Historical package names below refer to retired drafts; current paths and hashes are in the final-room manifest. [Open the final-room index](../../Open-Tabletop_Asset_Builders/3d_models/rooms/README.md).
+
+### Earlier room sources relocated (October 19, 2026)
+
+Cozy, Poker Night, Medieval Tavern and Modern Bar now share the same companion `3d_models/rooms/<theme-id>/` organization as the eleven newer themes. Their final furnishings, corrected windows/lighting, ceiling and rear-wall sources are together, with original publisher inputs, runtime copies, maps and review/provenance records. The accepted gray pup master and scenery derivative live once under `rooms/_shared/gray-pup-in-bed/`. Original owner sources and approval inputs are retained; superseded drafts, backups, redundant ZIP bundles and unused compression candidates were removed. Old package names elsewhere in dated records describe history. [Current source index](../../Open-Tabletop_Asset_Builders/3d_models/rooms/README.md). The app model files/manifest/registry are unchanged.
