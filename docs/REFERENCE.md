@@ -2352,11 +2352,15 @@ No recovery secrets are synchronized to rooms or exposed in public user projecti
 
 ### HTTP (Express)
 
-`package.json` overrides transitive **`qs` to `6.16.0`**, with the resolved package
-pinned in `package-lock.json`. This addresses GHSA-x5fp-wj9c-mxmx (comma-parsing
-array-limit bypass) and GHSA-4mjr-xmp4-gh2g (stringification denial of service),
-while retaining Express `4.22.2` and body-parser `1.20.6`. Their dependency ranges
-otherwise exclude the patched release. Reassess the override when upgrading them.
+`package.json` overrides transitive **`qs` to `6.16.1`**, pinned in the lockfile.
+This retains the earlier array-limit/stringification fixes and addresses
+GHSA-6pq8-jhm2-2vcw. The locked HTTP tree uses Express `4.22.3` and body-parser
+`1.20.9`, which fixes GHSA-27r3-jxmh-p828. Recovery mail locks Nodemailer `10.2.1`
+with minimum `^10.2.1`; its existing structured-recipient and SMTP/TLS handling
+are preserved. `test/dependency-security.js` exercises hostile query serialization,
+quoted/commented recipients, actual transport serialization through
+`createRecoveryMailer`, and valid/corrupt compressed HTTP bodies. Reassess the qs
+override during the next HTTP dependency update.
 Use `npm audit` to inspect production and development dependencies; `npm run audit`
 checks production dependencies and fails only at high severity or above.
 

@@ -19,6 +19,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 - Consolidate the eleven reviewed local room asset packages into theme subfolders; retain final native sources, raw/optimized exports, textures, previews and provenance, and remove superseded drafts/backups. Retarget offline tools and documentation links; installed runtime assets remain byte-identical.
 
 ### Fixed
+- Repair the production dependency audit by locking body-parser 1.20.9 and
+  Nodemailer 10.2.1, raising the Nodemailer minimum to `^10.2.1`, and updating the
+  existing qs override to 6.16.1. Add regressions for hostile query values, email
+  recipient parsing, recovery-mail serialization and compressed HTTP bodies.
+  Preserve the CI audit threshold and unrelated local dependency updates.
+  Reinstall locked dependencies and restart the server.
 - Correct Ancient Temple column shaft UVs so the stone texture has even scale
   around and along each column. Geometry, smooth normals and stone maps are
   preserved. Hard-refresh clients; no migration or server restart is needed.

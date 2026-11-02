@@ -7,6 +7,32 @@ implemented locally after the original inventory review; rollout remains unpushe
 See the [maintenance plan](MAINTENANCE_PLAN.md) for the update process and the
 [Colyseus 0.18 assessment](COLYSEUS_018_ASSESSMENT.md) for the first proposed upgrade.
 
+## Production audit fix — 2026-11-02
+
+CI's committed lockfile still contained body-parser 1.20.8 and Nodemailer 10.0.14;
+newer local resolutions were outside the theme commit. The old qs override also
+held the tree at a newly affected 6.16.0. This bounded update changes only those
+three package records and the root Nodemailer requirement. Other pre-existing
+local lockfile updates remain outside the security commit.
+
+| Package | Previous committed version | Selected version | Reason |
+| --- | --- | --- | --- |
+| body-parser | 1.20.8 | 1.20.9 | [Compressed request trailing-byte DoS](https://github.com/advisories/GHSA-27r3-jxmh-p828) |
+| qs | 6.16.0 override | 6.16.1 override | [Hostile comma-array stringification](https://github.com/advisories/GHSA-6pq8-jhm2-2vcw) |
+| Nodemailer | 10.0.14 | 10.2.1, minimum `^10.2.1` | [Nested comments](https://github.com/advisories/GHSA-8c8m-p3m8-cjg8), [group delimiters](https://github.com/advisories/GHSA-m943-m63m-w62w), [quoted local parts](https://github.com/advisories/GHSA-85x2-q946-cp5h) |
+
+The fresh production audit reports **zero** findings for the exact selected tree.
+The full development audit reports five moderate affected package entries from
+the existing ESLint/minimatch toolchain
+([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)), with no
+high/critical findings. The maintainer will review this separately during the next
+tooling update, before the next release; npm's suggested major downgrade is not
+part of this fix. The production gate remains `--omit=dev --audit-level=high`.
+
+See [release verification](RELEASING.md#production-dependency-security-update--2026-11-02).
+These results describe npm dependencies, not deployment acceptance or application
+reachability of every advisory. No production function or transport contract changes.
+
 ## Sources of truth and scope
 
 - Root [package.json](../package.json) declares application/runtime and development
@@ -39,7 +65,7 @@ coordinates packages spanning several subsystems.
 | `convex-hull` | `^1.0.3` | `1.0.3` | Physics hull generation; geometry/physics group |
 | `express` | `^4.19.2` | `4.22.3` | HTTP routes and static serving; HTTP/security group |
 | `helmet` | `^7.2.0` | `7.2.0` | Security headers and enforced CSP; HTTP/security group |
-| `nodemailer` | `^10.0.12` | `10.0.14` | Optional recovery email; account-security group |
+| `nodemailer` | `^10.2.1` | `10.2.1` | Optional recovery email; account-security group |
 | `pg` | `^8.23.0` | `8.23.1` | PostgreSQL client; persistence group |
 | `redis` | `^5.12.1` | `5.12.1` | Shared rate-limit store; admission/security group |
 | `sharp` | `^0.35.4` | `0.35.5` | Media validation/derivatives; asset group |
@@ -52,10 +78,11 @@ Multi-instance room routing remains separate proposed work in
 
 ### Overrides and native code
 
-- Root `overrides.qs` pins **6.16.0**. The historical changelog records
-  GHSA-x5fp-wj9c-mxmx and GHSA-4mjr-xmp4-gh2g as its reasons. Recheck upstream
-  dependency ranges and advisories before removing it; a parent upgrade alone
-  does not establish that the override is obsolete.
+- Root `overrides.qs` pins **6.16.1**, retaining the earlier GHSA-x5fp-wj9c-mxmx
+  and GHSA-4mjr-xmp4-gh2g fixes and addressing GHSA-6pq8-jhm2-2vcw. Current
+  Express/body-parser ranges admit this release; retain the explicit reviewed
+  resolution here and reassess removal at the next HTTP dependency update.
+  body-parser is locked to **1.20.9**.
 - Root `allowScripts` contains `msgpackr-extract@3.0.4: true`; the locked package
   has an install script. Preserve/review this configuration and verify the chosen
   npm version's actual script policy. The field alone is not evidence that all

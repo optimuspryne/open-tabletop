@@ -37,7 +37,7 @@
     "convex-hull": "^1.0.3",
     "express": "^4.19.2",
     "helmet": "^7.2.0",
-    "nodemailer": "^10.0.12",
+    "nodemailer": "^10.2.1",
     "pg": "^8.23.0",
     "redis": "^5.12.1",
     "sharp": "^0.35.4",
@@ -45,7 +45,7 @@
     "yazl": "^3.3.1"
   },
   "overrides": {
-    "qs": "6.16.0"
+    "qs": "6.16.1"
   },
   "allowScripts": {
     "msgpackr-extract@3.0.4": true
