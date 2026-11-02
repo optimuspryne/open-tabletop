@@ -8,6 +8,51 @@ exact current artifacts in the [inventory](DEPENDENCY_INVENTORY.md). The
 local migration. Rollout needs a coordinated server/SDK restart and browser refresh,
 with backup/rollback and manual deployment acceptance before release.
 
+## Production dependency security update — 2026-11-02
+
+The production dependency tree selects body-parser **1.20.9**, qs **6.16.1**
+through the existing override, and Nodemailer **10.2.1** with minimum `^10.2.1`.
+Express stays **4.22.3**. This fixes the reported production audit findings while
+preserving the CI threshold, application adapters, SMTP/TLS configuration and CSP.
+See the [inventory](DEPENDENCY_INVENTORY.md#production-audit-fix--2026-11-02) for
+advisories, exact scope and the separate development-tool audit findings.
+
+Source/native deployments use Node 24+ and run `npm ci --omit=dev` in the release
+directory, then restart the application. Docker operators rebuild/pull the updated
+app image and restart it. This dependency-only update requires no migration,
+environment variable, port or browser refresh. Pending feature migrations and
+coordinated runtime upgrades still apply.
+
+Verification uses an isolated copy of the committed source with only the selected
+dependency changes, preserving the working installation and other local lockfile
+updates. Hosted CI, external SMTP/TLS and deployment acceptance remain separate.
+No push, publication or deployment is performed.
+
+Local verification on 2026-11-02, using Node **24.22.2**:
+
+- Clean isolated install and `npm run check`: lint, format, CSS and all **1,383**
+  tests passed. Four new dependency cases exercise hostile qs values, three mail
+  parsing ambiguities, the existing recovery adapter with a real JSON transport,
+  and valid/corrupt gzip/deflate HTTP bodies. The qs case also reproduces the
+  failure against the original installed 6.16.0. The HTTP case is a compatibility
+  and error-handling check, not a reproduction of every trailing-byte exploit.
+- `npm run test:accounts`: all **six** full/compact desktop/touch layouts passed.
+- Reproduced the CI audit with fresh `npm ci --omit=dev --ignore-scripts`, then
+  `npm run audit`: **zero production vulnerabilities**, exit 0. The separately
+  reviewed full development audit retains the moderate tooling finding recorded
+  in the inventory; no production finding is deferred.
+- Documentation links and diff whitespace passed. The working installation was
+  preserved; run the locked install before using the patched packages locally.
+
+| Files | Change |
+| --- | --- |
+| `package.json`, `package-lock.json` | Raise the existing Nodemailer floor and qs override; lock only the three selected package records and root requirement |
+| `test/dependency-security.js` | Add four behavior/failure cases, a local Express fixture and actual mail serialization; reuse `createRecoveryMailer` without production changes |
+| `CHANGELOG.md` | Record the security fix and reinstall/restart requirement |
+| `docs/DEPENDENCY_INVENTORY.md` | Record exact versions, advisories, scope and separate tooling follow-up |
+| `docs/ARCHITECTURE.md`, `docs/REFERENCE.md` | Update dependency boundaries and regression-test contracts |
+| `docs/RELEASING.md` | Record rollout requirements, verification and remaining deployment/SMTP acceptance |
+
 ## 0.23.0 Node runtime alignment
 
 The app now requires **Node.js 24 or newer**. `.nvmrc` selects Node 24 for local
